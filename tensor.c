@@ -74,9 +74,42 @@ void print_tensor(Tensor *t, int size, int *dims) {
     }
 }
 
+// CUDA matmul
+/*
+#define TILE_W 2
+__global__ void matmul_tensor_k(Tensor *t1, Tensor *t2, Tensor *out, int width) {
+    __shared__ float tile1[TILE_W][TILE_W];
+    __shared__ float tile2[TILE_W][TILE_W];
+
+    // simplify variables
+    int tx = threadIdx.x; ty = threadIdx.y;
+    int bx = blockIdx.x; by = blockIdx.y;
+
+    // identify row and col of the out element to work on
+    int row = by * TILE_W + ty;
+    int col = bx * TILE_W + tx;
+
+    // accumulate the results
+    float Pvalue = 0;
+    // loop over tile1 and tile2(faces) required to compute out
+    for (int i = 0; i < width/TILE_W; i++) {
+        tile1[ty][tx] = t1[row*width + i*TILE_W+tx];
+        tile2[ty][tx] = t2[(i*TILE_W + ty) * width + col];
+        __syncthreads();
+    
+        // compute dot-product
+        for (int k = 0; k < TILE_W; k++) {
+            Pvalue += tile1[ty][k] * tile2[k][tx];
+        }
+        __syncthreads();
+    }
+    out[row * width + col] = Pvalue;
+}
+*/
+
 int main() {
     // example test of creating a initializing a Tensor
-    int dims[] = {3,3};
+    int dims[] = {4,4};
     Tensor tensor1 = create_tensor(2, dims);
     init_ones(&tensor1);
     Tensor tensor2 = create_tensor(2, dims);
