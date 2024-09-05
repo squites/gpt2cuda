@@ -193,6 +193,20 @@ void get_batch(char *split, int *train_data, int *test_data, int train_sz, int t
 
 }
 
+float *linear(int n_embd1, int n_embd2, bool bias) {
+
+}
+
+void self_attention(float *x, float *out, int n_embd, int B, int T, int C) {
+    float *wK = (float*)malloc(x[0] * x[1] * n_embd * sizeof(float));
+    float *wQ = (float*)malloc(x[0] * x[1] * n_embd * sizeof(float));
+    float *wV = (float*)malloc(x[0] * x[1] * n_embd * sizeof(float));
+
+    bool bias = 0;
+    
+    wK = matmul(x, linear(n_embd, n_embd, bias));
+}
+
 
 int main() {
     char *filename = "input.txt";
