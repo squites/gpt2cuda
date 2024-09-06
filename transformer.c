@@ -129,28 +129,7 @@ void split_data(int *tokens, int sz, int *train, int *test, int train_sz, int te
         test[i] = tokens[train_sz + i];
     }
 }
-
 /*
-int *reshape(int *x, Tuple_t *dims) {
-    int *tensor = (int*)malloc()
-    for (int i = 0; i < dims->x; i++) {
-        for (int j = 0; j < dims->y; j++) {
-            for (int k = 0; k < dims->z; k++) {
-
-            }
-        }
-    }
-}
-
-
-typedef struct {
-    int x;
-    int y;
-    int z;
-} Tuple_t;
-
-*/
-
 // NEEDS TO MODIFY. THIS IS JUST A TEST!!!
 void get_batch(char *split, int *train_data, int *test_data, int train_sz, int test_sz, int *x, int *y,
                int batch_sz, int block_sz) {
@@ -191,8 +170,16 @@ void get_batch(char *split, int *train_data, int *test_data, int train_sz, int t
         
     //}
 
-}
+}*/
 
+// implement linear? 
+/* How it works:
+    m = nn.Linear(20, 30)
+    input = tensor(128, 20)
+    when output = m(input). performs a matrix multiplication of (128, 20) @ (20, 30) -> (128, 30)
+*/
+
+/*
 float *linear(int n_embd1, int n_embd2, bool bias) {
 
 }
@@ -206,10 +193,10 @@ void self_attention(float *x, float *out, int n_embd, int B, int T, int C) {
     
     wK = matmul(x, linear(n_embd, n_embd, bias));
 }
-
+*/
 
 int main() {
-    char *filename = "input.txt";
+    char *filename = "input/input.txt";
     char *input = read_file(filename);
     if (input == NULL) {
         printf("Error reading file!\n");
@@ -242,9 +229,9 @@ int main() {
     //print_tokens(test_data, test_sz);
     
     // generate a random batch of data (inputs: x, target: y)
-    int *x = (int*)malloc(BATCH_SZ * BLOCK_SZ * sizeof(int));
-    int *y = (int*)malloc(BATCH_SZ * BLOCK_SZ * sizeof(int));
-    get_batch("train", train_data, test_data, train_sz, test_sz, x, y, BATCH_SZ, BLOCK_SZ);
+    //int *x = (int*)malloc(BATCH_SZ * BLOCK_SZ * sizeof(int));
+    //int *y = (int*)malloc(BATCH_SZ * BLOCK_SZ * sizeof(int));
+   // get_batch("train", train_data, test_data, train_sz, test_sz, x, y, BATCH_SZ, BLOCK_SZ);
 
 
     
@@ -252,7 +239,7 @@ int main() {
     free(tokens);
     free(train_data);
     free(test_data);
-    free(x); free(y);
+    //free(x); free(y);
 
     return 0;
 }

@@ -1,0 +1,4 @@
+- Should I keep implementing things with tensor abstraction? Or should I instead implement with float arrays to keep simple.
+- Remember, the main focus is to apply CUDA on everything. So basically train a simple transformer using CUDA kernels, and then implement 
+quantization on inference. (learn more about it).
+- The main focus right now should be just implement the decoder transformer in CUDA. (Don't worry about tensor abstractions by now)!

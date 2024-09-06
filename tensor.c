@@ -106,7 +106,7 @@ __global__ void matmul_tensor_k(Tensor *t1, Tensor *t2, Tensor *out, int width) 
     out[row * width + col] = Pvalue;
 }
 */
-
+/*
 int main() {
     // example test of creating a initializing a Tensor
     int dims[] = {4,4};
@@ -139,3 +139,4 @@ int main() {
 
     return 0;
 }
+*/
