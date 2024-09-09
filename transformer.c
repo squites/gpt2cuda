@@ -103,6 +103,36 @@ void encode_tokens(char *str, int *tokens, int n) {
     }
 }
 
+float *init_token_emb(int vocab_sz, int emb_dim) {
+    float *embeddings = (float*)malloc(vocab_sz * emb_dim * sizeof(float));
+    for (int i = 0; i < vocab_sz*emb_dim; i++) {
+        embeddings[i] = ((float)rand() / (float)RAND_MAX) * 0.2f - 0.1f;
+    }
+
+    return embeddings;
+}
+
+// token emdding converts a token id into a vector of size C.
+void token_embedding(float *output, int *token_ids, float *embeddings, int B, int T, int C) {
+    // token is represented by an integer (NOT FLOAT)
+    for (int b = 0; b < B; b++) {
+        for (int t = 0; t < T; t++) {
+            int token_id = token_ids[b * T + t];
+            float *token_emb = embeddings + token_id * C;
+
+            for (int c = 0; c < C; c++) {
+                output[(b * T + t) * C + c] = token_emb[c];
+            }
+        }
+    }
+}
+
+//void encoder(int B, int T, int C, float *wte, float *wpe, float *in, float *out) {
+    // wte: token embedding matrix
+    // wpe: positional embedding matrix
+//}
+
+
 void print_tokens(int *tokens, int n) {
     for (int i = 0; i < n; i++) {
         if (i == n-1) {
@@ -184,15 +214,6 @@ float *linear(int n_embd1, int n_embd2, bool bias) {
 
 }
 
-void self_attention(float *x, float *out, int n_embd, int B, int T, int C) {
-    float *wK = (float*)malloc(x[0] * x[1] * n_embd * sizeof(float));
-    float *wQ = (float*)malloc(x[0] * x[1] * n_embd * sizeof(float));
-    float *wV = (float*)malloc(x[0] * x[1] * n_embd * sizeof(float));
-
-    bool bias = 0;
-    
-    wK = matmul(x, linear(n_embd, n_embd, bias));
-}
 */
 
 int main() {
@@ -214,13 +235,12 @@ int main() {
     printf("n: %d\n", n);
     int *tokens = (int*)malloc(n * sizeof(int));
     encode_tokens(str, tokens, n);
-    //print_tokens(tokens, n);
     printf("tokens length: %d\n", n);
 
     // train/test split
     int split = (int)(0.9*n);
-    //printf("split: %d\n", split);
-    //printf("(n-split): %d\n", n-split);
+    printf("split: %d\n", split);
+    printf("(n-split): %d\n", n-split);
     int *train_data = (int*)malloc(split * sizeof(int));
     int *test_data = (int*)malloc((n-split) * sizeof(int));
     int train_sz = split, test_sz = n-split;
@@ -232,6 +252,27 @@ int main() {
     //int *x = (int*)malloc(BATCH_SZ * BLOCK_SZ * sizeof(int));
     //int *y = (int*)malloc(BATCH_SZ * BLOCK_SZ * sizeof(int));
    // get_batch("train", train_data, test_data, train_sz, test_sz, x, y, BATCH_SZ, BLOCK_SZ);
+
+    // test for token_embedding
+    int vocab_size = strlen(vocab);
+    int C = 128;
+    int B = 2;
+    int T = 5;
+
+    float *embeddings = init_token_emb(vocab_size, C);
+    int token_ids[10] = {12, 345, 678, 910, 11, 5678, 1234, 2345, 3456, 4567};
+    float *output = (float*)malloc(B * T * C * sizeof(float));
+    token_embedding(output, token_ids, embeddings, B, T, C);
+    // Print the result for the first token in the first batch (for demonstration purposes)
+    printf("Embedding for the first token in the first batch:\n");
+    for (int i = 0; i < C; i++) {
+        printf("%f ", output[i]);
+    }
+    printf("\n");
+
+    // Free the allocated memory
+    free(embeddings);
+    free(output);
 
 
     
