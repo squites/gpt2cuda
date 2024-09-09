@@ -7,6 +7,7 @@
 
 #define BATCH_SZ 4
 #define BLOCK_SZ 8
+#define EMBD_SZ 4
 
 char *read_file(char *filename) {
     FILE *fp = fopen(filename, "r");
@@ -54,46 +55,6 @@ char *get_vocab(char *input) {
     return vocab;
 }
 
-#define VOCAB_SIZE 65
-int size = 0;
-char keys[VOCAB_SIZE][VOCAB_SIZE];
-int values[VOCAB_SIZE];
-
-int get_index(char *key) {
-    for (int i = 0; i < size; i++) {
-        if (strcmp(keys[i], key) == 0) {
-            return i;
-        }
-    }
-    return -1;
-}
-
-void insert(char key[], int value) {
-    int index = get_index(key);
-    if (index == -1) {
-        strcpy(keys[size], key);
-        values[size] = value;
-        size++;
-    } else {
-        values[index] = value;
-    }
-}
-
-int get(char key[]) {
-    int index = get_index(key);
-    if (index == -1) {
-        return -1;
-    } else {
-        return values[index];
-    }
-}
-
-void printmap() {
-    for (int i = 0; i < size; i++) {
-        printf("%s: %d\n", keys[i], values[i]);
-    }
-}
-
 // Usar "char_tokenization.c" depois
 // function that encodes the string input, and a function to print those tokens
 void encode_tokens(char *str, int *tokens, int n) {
@@ -103,7 +64,7 @@ void encode_tokens(char *str, int *tokens, int n) {
     }
 }
 
-float *init_token_emb(int vocab_sz, int emb_dim) {
+float *init_token_emb_matrix(int vocab_sz, int emb_dim) {
     float *embeddings = (float*)malloc(vocab_sz * emb_dim * sizeof(float));
     for (int i = 0; i < vocab_sz*emb_dim; i++) {
         embeddings[i] = ((float)rand() / (float)RAND_MAX) * 0.2f - 0.1f;
@@ -112,7 +73,7 @@ float *init_token_emb(int vocab_sz, int emb_dim) {
     return embeddings;
 }
 
-// token emdding converts a token id into a vector of size C.
+// token embedding converts a token id into a vector of size C.
 void token_embedding(float *output, int *token_ids, float *embeddings, int B, int T, int C) {
     // token is represented by an integer (NOT FLOAT)
     for (int b = 0; b < B; b++) {
@@ -125,6 +86,14 @@ void token_embedding(float *output, int *token_ids, float *embeddings, int B, in
             }
         }
     }
+}
+
+float *init_pos_emb_matrix(int sequence_len, int size) {
+    float *pos_embeddings = (float*)malloc(sequence_len * size * sizeof(float));
+    for (int i = 0; i < sequence_len*size; i++) {
+        pos_embeddings[i] = ((float)rand() / (float)RAND_MAX) * 0.2f - 0.1f;
+    }
+    return pos_embeddings;
 }
 
 //void encoder(int B, int T, int C, float *wte, float *wpe, float *in, float *out) {
@@ -159,48 +128,26 @@ void split_data(int *tokens, int sz, int *train, int *test, int train_sz, int te
         test[i] = tokens[train_sz + i];
     }
 }
-/*
-// NEEDS TO MODIFY. THIS IS JUST A TEST!!!
-void get_batch(char *split, int *train_data, int *test_data, int train_sz, int test_sz, int *x, int *y,
+
+// get a random batch of data
+void get_batch(char *split, int *train_data, int *test_data, int data_sz, int *x, int *y,
                int batch_sz, int block_sz) {
-    int *data = NULL;
-    int data_sz;
-    int ix;//[batch_sz] = {0};
-    //int *x = (int*)malloc(batch_sz * block_sz * sizeof(int));
-    //int *y = (int*)malloc(batch_sz * block_sz * sizeof(int));
-    
-    if (strcmp(split, "train")) {
-        data = &train_data;
-        data_sz = train_sz;
-    } else {
-        data = &test_data;
-        data_sz = test_sz;
-    }
+    int *data = (split == "train") ? train_data : test_data;
+    int ix;
+    int ixs[batch_sz]; // use this instead if I want to keep track of the random indices
 
-    //int **x_B = (int**)malloc(batch_sz * block_sz * sizeof(int));
-    //for (int j = 0; j < batch_sz; j++) {
-    //    for (int i = 0; i < block_sz; i++) {
-
-    //    }
-    //}
-
-    // generate random indices 
-    srand(time(0));
+    // generate (batch_sz) random indices 
+    srand(time(NULL));
     for (int i = 0; i < batch_sz; i++) { // ex: batch_sz=4
-        ix = (rand() % (data_sz - block_sz) + 1);
+        ix = (rand() % (data_sz - block_sz));// + 1);
+        //ixs[i] = ix;
+        printf("ix:%d\n", ix);
         for (int j = 0; j < block_sz; j++) {
             x[i * block_sz + j] = data[ix + j]; // this is stacking each block_sz row.
-            //y[i * block_sz + j] = data[ix + j + 1];
+            y[i * block_sz + j] = data[ix + j + 1];
         }
     }
-
-
-    //x = reshape(x, )
-    //for (int i = 0; i < batch_sz*block_sz; i+=block_sz) {
-        
-    //}
-
-}*/
+}
 
 // implement linear? 
 /* How it works:
@@ -226,11 +173,13 @@ int main() {
     
     // get vocab from input string and sort. For character tokenization we don't actually need a vocab. But eventually we'll implement a more efficient tokenization (BPE)
     char *vocab = get_vocab(input);
+    int vocab_sz = strlen(vocab);
     qsort(vocab, strlen(vocab), sizeof(char), compare);
     printf("vocab:\n%s\n%lu\n", vocab, strlen(vocab)); // 1st char of vocab is '\n'
 
     // encode tokens
-    char *str = input; // input: passing the whole file
+    char *str = "First Citizen: We are accounted poor citizens, the patricians good. What authority surfeits on would relieve us: if they would yield us but the superfluity, while it were wholesome, we might guess they relieved us humanely; but they think we are too dear: the leanness that afflicts us, the object of our misery, is as an inventory to particularise their abundance; our sufferance is a gain to them Let us revenge this with our pikes, ere we become rakes: for the gods know I ";
+    //char *str = input; // input: passing the whole file
     int n = strlen(str);
     printf("n: %d\n", n);
     int *tokens = (int*)malloc(n * sizeof(int));
@@ -249,20 +198,35 @@ int main() {
     //print_tokens(test_data, test_sz);
     
     // generate a random batch of data (inputs: x, target: y)
-    //int *x = (int*)malloc(BATCH_SZ * BLOCK_SZ * sizeof(int));
-    //int *y = (int*)malloc(BATCH_SZ * BLOCK_SZ * sizeof(int));
-   // get_batch("train", train_data, test_data, train_sz, test_sz, x, y, BATCH_SZ, BLOCK_SZ);
+    int *x = (int*)malloc(BATCH_SZ * BLOCK_SZ * sizeof(int));
+    int *y = (int*)malloc(BATCH_SZ * BLOCK_SZ * sizeof(int));
+    get_batch("train", train_data, test_data, train_sz, x, y, BATCH_SZ, BLOCK_SZ);
+    printf("x size:%d\n", sizeof(x)/sizeof(x[0]));
+    // printing (DEBUG)
+    for (int i = 0; i < BATCH_SZ; i++) {
+        printf("Batch %d:\n", i + 1);
+        printf("x: ");
+        for (int j = 0; j < BLOCK_SZ; j++) {
+            printf("%d ", x[i * BLOCK_SZ + j]);
+        }
+        printf("\n");
+        printf("y: ");
+        for (int j = 0; j < BLOCK_SZ; j++) {
+            printf("%d ", y[i * BLOCK_SZ + j]);
+        }
+        printf("\n");
+    }
+
 
     // test for token_embedding
-    int vocab_size = strlen(vocab);
-    int C = 128;
-    int B = 2;
-    int T = 5;
+    int C = 10;
+    int B = 1;
+    int T = n;
+    float *embeddings = init_token_emb_matrix(vocab_sz, C);
 
-    float *embeddings = init_token_emb(vocab_size, C);
-    int token_ids[10] = {12, 345, 678, 910, 11, 5678, 1234, 2345, 3456, 4567};
-    float *output = (float*)malloc(B * T * C * sizeof(float));
-    token_embedding(output, token_ids, embeddings, B, T, C);
+    //int token_ids[10] = {12, 345, 678, 910, 11, 5678, 1234, 2345, 3456, 4567};
+    float *output = (float*)malloc(n * C * sizeof(float));
+    token_embedding(output, tokens, embeddings, B, T, C);
     // Print the result for the first token in the first batch (for demonstration purposes)
     printf("Embedding for the first token in the first batch:\n");
     for (int i = 0; i < C; i++) {
@@ -280,7 +244,7 @@ int main() {
     free(tokens);
     free(train_data);
     free(test_data);
-    //free(x); free(y);
+    free(x); free(y);
 
     return 0;
 }
