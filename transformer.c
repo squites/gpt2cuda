@@ -5,9 +5,9 @@
 #include <time.h>
 #include "tensor.c"
 
-#define BATCH_SZ 4
-#define BLOCK_SZ 8
-#define EMBD_SZ 4
+#define BATCH_SZ 4 // B
+#define BLOCK_SZ 8 // T
+#define EMBD_SZ 4  // C
 
 char *read_file(char *filename) {
     FILE *fp = fopen(filename, "r");
@@ -26,7 +26,6 @@ char *read_file(char *filename) {
         i++;
     }
     string[i] = '\0';
-
     fclose(fp);
 
     return string;
@@ -57,13 +56,35 @@ char *get_vocab(char *input) {
 
 // Usar "char_tokenization.c" depois
 // function that encodes the string input, and a function to print those tokens
+/*
 void encode_tokens(char *str, int *tokens, int n) {
     for (int i = 0; i < n; i++) {
         char ch = str[i];
         tokens[i] = (int)ch;
     }
 }
+*/
 
+int get_vocab_index_v2(char *vocab, char ch) {
+    char *ptr = strchr(vocab, ch); // strchr: find the first occurence of a char in a string. Returns a pointer
+    if (ptr) return ptr - vocab;
+    return -1;
+}
+
+void encode_tokens_v2(char *str, int *tokens, char *vocab, int n) {
+    for (int i = 0; i < n; i++) {
+        char ch = str[i];
+        tokens[i] = get_vocab_index_v2(vocab, ch);
+        printf("char:%c\n", ch); // prints to check if the char/token mapping is right
+        printf("token:%d\n", tokens[i]);
+        if (tokens[i] == -1) {
+            printf("Error: Character %c not found in vocab!\n", ch);
+            exit(1);
+        }
+    }
+}
+
+// creates the embedding lookup table with random values
 float *init_token_emb_matrix(int vocab_sz, int emb_dim) {
     float *embeddings = (float*)malloc(vocab_sz * emb_dim * sizeof(float));
     for (int i = 0; i < vocab_sz*emb_dim; i++) {
@@ -74,8 +95,9 @@ float *init_token_emb_matrix(int vocab_sz, int emb_dim) {
 }
 
 // token embedding converts a token id into a vector of size C.
-void token_embedding(float *output, int *token_ids, float *embeddings, int B, int T, int C) {
+void token_embedding(float *output, int *token_ids, float *embeddings, int B, int T, int C, int vocab_sz) {
     // token is represented by an integer (NOT FLOAT)
+    //assert(token_ids >= 0 && token_ids < vocab_sz);
     for (int b = 0; b < B; b++) {
         for (int t = 0; t < T; t++) {
             int token_id = token_ids[b * T + t];
@@ -86,14 +108,6 @@ void token_embedding(float *output, int *token_ids, float *embeddings, int B, in
             }
         }
     }
-}
-
-float *init_pos_emb_matrix(int sequence_len, int size) {
-    float *pos_embeddings = (float*)malloc(sequence_len * size * sizeof(float));
-    for (int i = 0; i < sequence_len*size; i++) {
-        pos_embeddings[i] = ((float)rand() / (float)RAND_MAX) * 0.2f - 0.1f;
-    }
-    return pos_embeddings;
 }
 
 //void encoder(int B, int T, int C, float *wte, float *wpe, float *in, float *out) {
@@ -113,7 +127,6 @@ void print_tokens(int *tokens, int n) {
     printf("\n");
 }
 
-
 // function to compare chars for qsort
 int compare(const void *a, const void *b) {
     return *(char*)a - *(char*)b;
@@ -132,14 +145,14 @@ void split_data(int *tokens, int sz, int *train, int *test, int train_sz, int te
 // get a random batch of data
 void get_batch(char *split, int *train_data, int *test_data, int data_sz, int *x, int *y,
                int batch_sz, int block_sz) {
-    int *data = (split == "train") ? train_data : test_data;
+    int *data = (split = "train") ? train_data : test_data;
     int ix;
-    int ixs[batch_sz]; // use this instead if I want to keep track of the random indices
+    //int ixs[batch_sz]; // use this instead if I want to keep track of the random indices
 
     // generate (batch_sz) random indices 
     srand(time(NULL));
-    for (int i = 0; i < batch_sz; i++) { // ex: batch_sz=4
-        ix = (rand() % (data_sz - block_sz));// + 1);
+    for (int i = 0; i < batch_sz; i++) { 
+        ix = (rand() % (data_sz - block_sz));
         //ixs[i] = ix;
         printf("ix:%d\n", ix);
         for (int j = 0; j < block_sz; j++) {
@@ -156,12 +169,6 @@ void get_batch(char *split, int *train_data, int *test_data, int data_sz, int *x
     when output = m(input). performs a matrix multiplication of (128, 20) @ (20, 30) -> (128, 30)
 */
 
-/*
-float *linear(int n_embd1, int n_embd2, bool bias) {
-
-}
-
-*/
 
 int main() {
     char *filename = "input/input.txt";
@@ -183,7 +190,8 @@ int main() {
     int n = strlen(str);
     printf("n: %d\n", n);
     int *tokens = (int*)malloc(n * sizeof(int));
-    encode_tokens(str, tokens, n);
+    //encode_tokens(str, tokens, n);
+    encode_tokens_v2(str, tokens, vocab, n);
     printf("tokens length: %d\n", n);
 
     // train/test split
@@ -201,7 +209,6 @@ int main() {
     int *x = (int*)malloc(BATCH_SZ * BLOCK_SZ * sizeof(int));
     int *y = (int*)malloc(BATCH_SZ * BLOCK_SZ * sizeof(int));
     get_batch("train", train_data, test_data, train_sz, x, y, BATCH_SZ, BLOCK_SZ);
-    printf("x size:%d\n", sizeof(x)/sizeof(x[0]));
     // printing (DEBUG)
     for (int i = 0; i < BATCH_SZ; i++) {
         printf("Batch %d:\n", i + 1);
@@ -219,16 +226,21 @@ int main() {
 
 
     // test for token_embedding
-    int C = 10;
-    int B = 1;
-    int T = n;
-    float *embeddings = init_token_emb_matrix(vocab_sz, C);
+    int B = BATCH_SZ;
+    int T = BLOCK_SZ;
+    int C = EMBD_SZ;
+    float *embeddings = init_token_emb_matrix(vocab_sz, C); // matrix is working fine
+    printf("(%d, %d)\n", vocab_sz, C);
+    for (int i = 0; i < C; i++) {
+        printf("%f, ", embeddings[i*C]);
+    }
 
     //int token_ids[10] = {12, 345, 678, 910, 11, 5678, 1234, 2345, 3456, 4567};
-    float *output = (float*)malloc(n * C * sizeof(float));
-    token_embedding(output, tokens, embeddings, B, T, C);
+    float *output = (float*)malloc(B * T * C * sizeof(float));
+    int *tokens_id = x;
+    token_embedding(output, tokens_id, embeddings, B, T, C, vocab_sz);
     // Print the result for the first token in the first batch (for demonstration purposes)
-    printf("Embedding for the first token in the first batch:\n");
+    printf("\nEmbedding for the first token in the first batch:\n");
     for (int i = 0; i < C; i++) {
         printf("%f ", output[i]);
     }
@@ -237,8 +249,6 @@ int main() {
     // Free the allocated memory
     free(embeddings);
     free(output);
-
-
     
     free(input);
     free(tokens);
