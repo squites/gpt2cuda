@@ -31,7 +31,7 @@ char *read_file(char *filename) {
     return string;
 }
 
-// get all characters from input string
+// get all possible characters from input string. (NOT USING RIGHT NOW!)
 char *get_vocab(char *input) {
     bool seen[256] = {false};
     int index = 0;
@@ -71,12 +71,13 @@ int get_vocab_index_v2(char *vocab, char ch) {
     return -1;
 }
 
+// encode tokens mapping the character to an integer
 void encode_tokens_v2(char *str, int *tokens, char *vocab, int n) {
     for (int i = 0; i < n; i++) {
         char ch = str[i];
         tokens[i] = get_vocab_index_v2(vocab, ch);
-        printf("char:%c\n", ch); // prints to check if the char/token mapping is right
-        printf("token:%d\n", tokens[i]);
+        //printf("char:%c\n", ch); // prints to check if the char/token mapping is right
+        //printf("token:%d\n", tokens[i]);
         if (tokens[i] == -1) {
             printf("Error: Character %c not found in vocab!\n", ch);
             exit(1);
@@ -105,6 +106,27 @@ void token_embedding(float *output, int *token_ids, float *embeddings, int B, in
 
             for (int c = 0; c < C; c++) {
                 output[(b * T + t) * C + c] = token_emb[c];
+            }
+        }
+    }
+}
+
+float *init_pos_emb_matrix(int seq_len, int emb_dim) {
+    float *pos_embeddings = (float*)malloc(seq_len * emb_dim * sizeof(float));
+    for (int i = 0; i < seq_len*emb_dim; i++) {
+        pos_embeddings[i] = ((float)rand() / (float)RAND_MAX) * 0.2f - 0.1f;
+    }
+    return pos_embeddings;
+}
+
+void pos_embedding(float *output, int *token_ids, float *pos_embeddings, int B, int T, int C) {
+    for (int b = 0; b < B; b++) {
+        for (int t = 0; t < T; t++) {
+            //int token_pos_id = token_ids[b * T + t];
+            float *token_pos_emb = pos_embeddings + t * C;
+
+            for (int c = 0; c < C; c++) {
+                output[(b * T + t) * C * c] = token_pos_emb[c];
             }
         }
     }
@@ -185,7 +207,8 @@ int main() {
     printf("vocab:\n%s\n%lu\n", vocab, strlen(vocab)); // 1st char of vocab is '\n'
 
     // encode tokens
-    char *str = "First Citizen: We are accounted poor citizens, the patricians good. What authority surfeits on would relieve us: if they would yield us but the superfluity, while it were wholesome, we might guess they relieved us humanely; but they think we are too dear: the leanness that afflicts us, the object of our misery, is as an inventory to particularise their abundance; our sufferance is a gain to them Let us revenge this with our pikes, ere we become rakes: for the gods know I ";
+    //char *str = "First Citizen: We are accounted poor citizens, the patricians good. What authority surfeits on would relieve us: if they would yield us but the superfluity, while it were wholesome, we might guess they relieved us humanely; but they think we are too dear: the leanness that afflicts us, the object of our misery, is as an inventory to particularise their abundance; our sufferance is a gain to them Let us revenge this with our pikes, ere we become rakes: for the gods know I ";
+    char *str = "aaaabcddba";
     //char *str = input; // input: passing the whole file
     int n = strlen(str);
     printf("n: %d\n", n);
@@ -237,15 +260,18 @@ int main() {
 
     //int token_ids[10] = {12, 345, 678, 910, 11, 5678, 1234, 2345, 3456, 4567};
     float *output = (float*)malloc(B * T * C * sizeof(float));
-    int *tokens_id = x;
+    int *tokens_id = x; // need to do to 'y' as well?
     token_embedding(output, tokens_id, embeddings, B, T, C, vocab_sz);
     // Print the result for the first token in the first batch (for demonstration purposes)
-    printf("\nEmbedding for the first token in the first batch:\n");
-    for (int i = 0; i < C; i++) {
-        printf("%f ", output[i]);
+    
+    for (int j = 0; j < T; j++) {
+        printf("\nEmbedding for the each T token in the first batch:\n");
+        for (int i = 0; i < C; i++) {
+            printf("%f ", output[j * C + i]);
+        }
+        printf("\n");
     }
     printf("\n");
-
     // Free the allocated memory
     free(embeddings);
     free(output);
