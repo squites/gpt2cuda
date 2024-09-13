@@ -101,7 +101,7 @@ void token_embedding(float *output, int *token_ids, float *embeddings, int B, in
     //assert(token_ids >= 0 && token_ids < vocab_sz);
     for (int b = 0; b < B; b++) {
         for (int t = 0; t < T; t++) {
-            int token_id = token_ids[b * T + t];
+            int token_id = token_ids[b * T + t]; // get the token value in the sequence. Ex: 2nd token of batch1 = [1 * 8 + 1] = [9]. So gets the token value at [9]. Could be 53 for example
             float *token_emb = embeddings + token_id * C;
 
             for (int c = 0; c < C; c++) {
@@ -111,9 +111,9 @@ void token_embedding(float *output, int *token_ids, float *embeddings, int B, in
     }
 }
 
-float *init_pos_emb_matrix(int seq_len, int emb_dim) {
-    float *pos_embeddings = (float*)malloc(seq_len * emb_dim * sizeof(float));
-    for (int i = 0; i < seq_len*emb_dim; i++) {
+float *init_pos_emb_matrix(int seq_len, int n_embd) { // (T, n_embd)
+    float *pos_embeddings = (float*)malloc(seq_len * n_embd * sizeof(float));
+    for (int i = 0; i < seq_len*n_embd; i++) {
         pos_embeddings[i] = ((float)rand() / (float)RAND_MAX) * 0.2f - 0.1f;
     }
     return pos_embeddings;
@@ -123,7 +123,7 @@ void pos_embedding(float *output, int *token_ids, float *pos_embeddings, int B, 
     for (int b = 0; b < B; b++) {
         for (int t = 0; t < T; t++) {
             //int token_pos_id = token_ids[b * T + t];
-            float *token_pos_emb = pos_embeddings + t * C;
+            float *token_pos_emb = pos_embeddings + t * C; // this gets the right row on each token. Multiplies by C because is linearized
 
             for (int c = 0; c < C; c++) {
                 output[(b * T + t) * C * c] = token_pos_emb[c];
@@ -132,11 +132,28 @@ void pos_embedding(float *output, int *token_ids, float *pos_embeddings, int B, 
     }
 }
 
-//void encoder(int B, int T, int C, float *wte, float *wpe, float *in, float *out) {
+// Trying to compact both into one function
+/*
+void encoder(int B, int T, int C, float *wte, float *wpe, float *in, float *out) {
     // wte: token embedding matrix
     // wpe: positional embedding matrix
-//}
+    for (int b = 0; b < B; b++) { // loop over batches
+        for (int t = 0; t < T; t++) { // loop over each token in the batch
+            // get token value on a specific index
+            int token_id = in[b * T + t]; // this gets the token value, not its position. That's why we don't use on pos_emb
+            // gets the token embedding of that token
+            float *token_embd = wte + token_id * C;
+            // gets the positional embedding of that token
+            float *pos_embd   = wpe + t * C;
+            for (int c = 0; c < C; c++) {
+                out[(b * T + t) * C * c] = token_embd[c] + pos_embd[c]; // add token_embd with pos_embd of that specific token.
+            }
 
+        }
+    }
+    
+}
+*/
 
 void print_tokens(int *tokens, int n) {
     for (int i = 0; i < n; i++) {
@@ -251,11 +268,30 @@ int main() {
     // test for token_embedding
     int B = BATCH_SZ;
     int T = BLOCK_SZ;
-    int C = EMBD_SZ;
-    float *embeddings = init_token_emb_matrix(vocab_sz, C); // matrix is working fine
-    printf("(%d, %d)\n", vocab_sz, C);
-    for (int i = 0; i < C; i++) {
-        printf("%f, ", embeddings[i*C]);
+    int C = 10;//EMBD_SZ;
+    float *embeddings = init_token_emb_matrix(vocab_sz, C); // (65, 4). matrix is working fine
+    float *pos_embeddings = init_pos_emb_matrix(T, C);      // ( 8, 4)
+
+    printf("\nTok matrix:\n");
+    int k = 0;
+    for (int i = 0; i < vocab_sz*C; i++) {
+        if (k == C) {
+            printf("\n");
+            k = 0;
+        }
+        k++;
+        printf("%f, ", embeddings[i]);
+    }
+
+    printf("\nPos matrix:\n");
+    int j = 0;
+    for (int i = 0; i < T*C; i++) {
+        if (j == C) {
+            printf("\n");
+            j = 0;
+        }
+        j++;
+        printf("%f, ", pos_embeddings[i]);
     }
 
     //int token_ids[10] = {12, 345, 678, 910, 11, 5678, 1234, 2345, 3456, 4567};
@@ -265,13 +301,13 @@ int main() {
     // Print the result for the first token in the first batch (for demonstration purposes)
     
     for (int j = 0; j < T; j++) {
-        printf("\nEmbedding for the each T token in the first batch:\n");
+        //printf("\nEmbedding for the each T token in the first batch:\n");
         for (int i = 0; i < C; i++) {
-            printf("%f ", output[j * C + i]);
+          //  printf("%f ", output[j * C + i]);
         }
-        printf("\n");
+       // printf("\n");
     }
-    printf("\n");
+    //printf("\n");
     // Free the allocated memory
     free(embeddings);
     free(output);
