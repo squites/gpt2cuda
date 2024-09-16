@@ -35,27 +35,19 @@ char *read_file(char *filename) {
 
 // Combine token embedding vector and positional embedding vector, encoding each token
 void encoder(int B, int T, int C, float *wte, float *wpe, int *in, float *out) {
-    // wte: token embedding matrix
-    // wpe: positional embedding matrix
     for (int b = 0; b < B; b++) { // loop over batches
         for (int t = 0; t < T; t++) { // loop over each token in the batch
             // get token value on a specific index
-            int token_id = in[b * T + t]; // this gets the token value, not its position. That's why we don't use on pos_emb
+            int token_value = in[b * T + t]; // this gets the token value, not its position. That's why we don't use on pos_emb
             // gets the token embedding of that token
-            float *token_embd = wte + token_id * C;
+            float *token_embd = wte + token_value * C;
             // gets the positional embedding of that token
             float *pos_embd = wpe + t * C;
             for (int c = 0; c < C; c++) {
                 out[(b * T + t) * C + c] = token_embd[c] + pos_embd[c]; // add token_embd with pos_embd of that specific token.
             }
-
         }
     }
-}
-
-// function to compare chars for qsort
-int compare(const void *a, const void *b) {
-    return *(char*)a - *(char*)b;
 }
 
 // function to split dataset tokens into train/test (90,10)%
@@ -103,27 +95,25 @@ int main() {
     // get vocab from input string and sort. For character tokenization we don't actually need a vocab. But eventually we'll implement a more efficient tokenization (BPE)
     char *vocab = get_vocab(input);
     int vocab_sz = strlen(vocab);
-    qsort(vocab, strlen(vocab), sizeof(char), compare);
-    printf("vocab:\n%s\n%lu\n", vocab, strlen(vocab)); // 1st char of vocab is '\n'
+    qsort(vocab, vocab_sz, sizeof(char), compare);
+    printf("vocab:\n%s\n%d\n", vocab, vocab_sz); // 1st char of vocab is '\n'
 
     // encode tokens
     char *str = "First Citizen: We are accounted poor citizens, the patricians good. What authority surfeits on would relieve us: if they would yield us but the superfluity, while it were wholesome, we might guess they relieved us humanely; but they think we are too dear: the leanness that afflicts us, the object of our misery, is as an inventory to particularise their abundance; our sufferance is a gain to them Let us revenge this with our pikes, ere we become rakes: for the gods know I ";
     //char *str = input; // input: passing the whole file
-    int n = strlen(str);
-    printf("n: %d\n", n);
-    int *tokens = (int*)malloc(n * sizeof(int));
-    //encode_tokens(str, tokens, n);
-    encode_tokens_v2(str, tokens, vocab, n);
-    printf("tokens length: %d\n", n);
+    int input_sz = strlen(str); // n
+    printf("n: %d\n", input_sz);
+    int *tokens = (int*)malloc(input_sz * sizeof(int));
+    encode_tokens_v2(str, tokens, vocab, input_sz);
+    printf("tokens length: %d\n", input_sz);
 
     // train/test split
-    int split = (int)(0.9*n); // (split=90%) and (n-split=10%)
+    int split = (int)(0.9*input_sz); // (split=90%) and (n-split=10%)
     int *train_data = (int*)malloc(split * sizeof(int));
-    int *test_data = (int*)malloc((n-split) * sizeof(int));
-    int train_sz = split, test_sz = n-split;
-    split_data(tokens, n, train_data, test_data, train_sz, test_sz);
-    //print_tokens(train_data, train_sz);
-    //print_tokens(test_data, test_sz);
+    int *test_data = (int*)malloc((input_sz-split) * sizeof(int));
+    int train_sz = split, test_sz = input_sz-split;
+    split_data(tokens, input_sz, train_data, test_data, train_sz, test_sz);
+    //print_tokens(train_data, train_sz); print_tokens(test_data, test_sz);
     
     // generate a random batch of data (inputs: x, target: y)
     int *x = (int*)malloc(BATCH_SZ * BLOCK_SZ * sizeof(int));
@@ -146,7 +136,7 @@ int main() {
     */
 
     // test for token_embedding
-    float *wte = init_token_emb_matrix(vocab_sz, C); // (65, 4). matrix is working fine
+    float *wte = init_tok_emb_matrix(vocab_sz, C); // (65, 4). matrix is working fine
     float *wpe = init_pos_emb_matrix(T, C);      // ( 8, 4)
 
     print_lookup_table("token", wte, vocab_sz, C);
@@ -154,7 +144,6 @@ int main() {
      
     float *output_emb = (float*)malloc(B * T * C * sizeof(float));
     int *tokens_id = x; // need to do to 'y' as well?
-    //token_embedding(output, tokens_id, embeddings, B, T, C, vocab_sz);
     encoder(B, T, C, wte, wpe, tokens_id, output_emb);
     
     // Print the result for the first token in the first batch (for demonstration purposes) 

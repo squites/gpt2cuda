@@ -45,8 +45,13 @@ void encode_tokens_v2(char *str, int *tokens, char *vocab, int n) {
     }
 }
 
+// function to compare chars for qsort
+int compare(const void *a, const void *b) {
+    return *(char*)a - *(char*)b;
+}
+
 // Initializes lookup-table for token and positional embeddings
-float *init_token_emb_matrix(int vocab_sz, int emb_dim) {
+float *init_tok_emb_matrix(int vocab_sz, int emb_dim) {
     float *embeddings = (float*)malloc(vocab_sz * emb_dim * sizeof(float));
     for (int i = 0; i < vocab_sz*emb_dim; i++) {
         embeddings[i] = ((float)rand() / (float)RAND_MAX) * 0.2f - 0.1f;
