@@ -89,6 +89,10 @@ void get_batch(char *split, int *train_data, int *test_data, int data_sz, int *x
 }
 
 int main() {
+    int B = BATCH_SZ;
+    int T = BLOCK_SZ;
+    int C = EMBD_SZ;
+    
     char *filename = "input/input.txt";
     char *input = read_file(filename);
     if (input == NULL) {
@@ -142,19 +146,16 @@ int main() {
     */
 
     // test for token_embedding
-    int B = BATCH_SZ;
-    int T = BLOCK_SZ;
-    int C = EMBD_SZ;
-    float *embeddings = init_token_emb_matrix(vocab_sz, C); // (65, 4). matrix is working fine
-    float *pos_embeddings = init_pos_emb_matrix(T, C);      // ( 8, 4)
+    float *wte = init_token_emb_matrix(vocab_sz, C); // (65, 4). matrix is working fine
+    float *wpe = init_pos_emb_matrix(T, C);      // ( 8, 4)
 
-    print_lookup_table("token", embeddings, vocab_sz, C);
-    print_lookup_table("pos", pos_embeddings, T, C);
+    print_lookup_table("token", wte, vocab_sz, C);
+    print_lookup_table("pos", wpe, T, C);
      
     float *output_emb = (float*)malloc(B * T * C * sizeof(float));
     int *tokens_id = x; // need to do to 'y' as well?
     //token_embedding(output, tokens_id, embeddings, B, T, C, vocab_sz);
-    encoder(B, T, C, embeddings, pos_embeddings, tokens_id, output_emb);
+    encoder(B, T, C, wte, wpe, tokens_id, output_emb);
     
     // Print the result for the first token in the first batch (for demonstration purposes) 
     for (int j = 0; j < T; j++) {
@@ -168,7 +169,8 @@ int main() {
     
     
     // Free the allocated memory
-    free(embeddings);
+    free(wte);
+    free(wpe);
     free(output_emb);
     
     free(input);
