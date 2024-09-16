@@ -50,6 +50,46 @@ void encoder(int B, int T, int C, float *wte, float *wpe, int *in, float *out) {
     }
 }
 
+void matmul_2d_cpu(float **m, float **n, float **out, int row, int col) {
+    for (int i = 0; i < row; i++) {
+        for (int j = 0; j < col; j++) {
+            out[i][j] = 0;
+            for (int k = 0; k < col; k++) {
+                out[i][j] += m[i][k] * n[k][j];
+            }
+        }
+    }
+}
+
+void matmul_cpu(float *m, float *n, float *out, int row, int col) {
+    for (int i = 0; i < row, i++) {
+        for (int j = 0; j < col; j++) {
+            m[i*row+j] * n[j*row+col] // m[i][j] * n[j][i]
+        }
+    }
+}
+
+float *init_matrix(int row, int col) {
+    float *out = (float*)malloc(row * col * sizeof(float));
+    for (int i = 0; i < row*col; i++) {
+        out[i] = ((float)rand() / (float)RAND_MAX);
+    }
+    return out;
+}
+
+void self_attention(int B, int T, int C, float *in, float *out) {
+    float *wQ = init_matrix(C, C);
+    float *wK = init_matrix(C, C);
+    float *wV = init_matrix(C, C);
+
+    for (int b = 0; b < B; b++) {
+        for (int t = 0; t < T; t++) {
+
+        }
+    }
+        float *query = 
+}
+
 // function to split dataset tokens into train/test (90,10)%
 void split_data(int *tokens, int sz, int *train, int *test, int train_sz, int test_sz) {
     for (int i = 0; i < train_sz; i++) {
