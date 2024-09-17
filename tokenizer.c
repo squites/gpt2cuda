@@ -50,11 +50,11 @@ int compare(const void *a, const void *b) {
     return *(char*)a - *(char*)b;
 }
 
-// Initializes lookup-table for token and positional embeddings
+// Initializes lookup-table for token and positional embeddings (WE CAN ALSO COMBINE THESE 2 INTO ONE FUNCTION)!
 float *init_tok_emb_matrix(int vocab_sz, int emb_dim) {
     float *embeddings = (float*)malloc(vocab_sz * emb_dim * sizeof(float));
     for (int i = 0; i < vocab_sz*emb_dim; i++) {
-        embeddings[i] = ((float)rand() / (float)RAND_MAX) * 0.2f - 0.1f;
+        embeddings[i] = ((float)rand() / (float)RAND_MAX); //* 0.2f - 0.1f; // take out this range of randoms!
     }
     return embeddings;
 }
@@ -62,7 +62,7 @@ float *init_tok_emb_matrix(int vocab_sz, int emb_dim) {
 float *init_pos_emb_matrix(int seq_len, int n_embd) { // (T, n_embd)
     float *pos_embeddings = (float*)malloc(seq_len * n_embd * sizeof(float));
     for (int i = 0; i < seq_len*n_embd; i++) {
-        pos_embeddings[i] = ((float)rand() / (float)RAND_MAX) * 0.2f - 0.1f;
+        pos_embeddings[i] = ((float)rand() / (float)RAND_MAX); //* 0.2f - 0.1f; // take out this range of randoms!
     }
     return pos_embeddings;
 }

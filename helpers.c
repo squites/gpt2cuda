@@ -15,7 +15,7 @@ void print_lookup_table(char *name, float *matrix, int row, int col) {
             k = 0;
         }
         k++;
-        printf("%f, ", matrix[i]);
+        printf("%.2f, ", matrix[i]);
     }
     printf("\n");
 }
