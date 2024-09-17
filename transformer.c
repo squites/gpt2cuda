@@ -65,8 +65,9 @@ void layernorm(int B, int T, int C, float *in, float *out, float beta, float gam
     for (int b = 0; b < B; b++) {
         for (int t = 0; t < T; t++) {
             float mean = 0.0f;
+            //float *embs = in + b * T * C + t * C; // should I do something like this?
             for (int c = 0; c < C; c++) {
-                mean += in[b * (T * C) + t * C + c];
+                mean += in[b * (T * C) + t * C + c]; // not right!
             }        
         }
     }
