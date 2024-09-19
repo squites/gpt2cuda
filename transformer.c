@@ -62,15 +62,16 @@ void encoder(int B, int T, int C, float *wte, float *wpe, int *in, float *out) {
 }
 
 // Layer normalization over the embedding dimmension for each token in the sequence. For each token, calculate the mean and variance over the token embedding vector. In the end, each token of each batch will have it's own mean and variance values.
+#define eps 1e-5
 void layernorm(int B, int T, int C, float *in, float *out, float beta, float gamma) {
     for (int b = 0; b < B; b++) {
         for (int t = 0; t < T; t++) {
-            float mean = 0.0f;
-            float *embs = in + b * T * C + t * C;
-            //float *embs = in + b * T * C + t * C; // should I do something like this?
+            float *in_ptr = in + b * T * C + t * C;
+        
             // calculate the mean
+            float mean = 0.0f;
             for (int c = 0; c < C; c++) {
-                mean += embs[c];
+                mean += in_ptr[c];
                 //mean += in[b * (T * C) + t * C + c]; // not right!
             }
             mean = mean/C;
@@ -78,13 +79,14 @@ void layernorm(int B, int T, int C, float *in, float *out, float beta, float gam
             // calculate the variance
             float var = 0.0f;
             for (int c = 0; c < C; c++) {
-                var += (embs[c] - mean)*(embs[c] - mean); // // (x-mean)?2 -> pow(embs[c]-mean, 2);
+                var += (in_ptr[c] - mean)*(in_ptr[c] - mean); // (x-mean)?2 -> pow(embs[c]-mean, 2);
             }
             var = var/C;
 
-            // normalize
-            float eps = 0.0f;
-            float x2 = (in[b * T + t] - mean) / (var + eps)*0.5;
+            // normalize (this works for each embedding value. We normalize each embedding value of the emb vector for each token)
+            //float eps = eps;
+            float *out_ptr = out + b * T * C + t * C;
+            float x = (in[b * T + t] - mean) / (var + eps)*0.5; // out[b * T + t]
         }
     }
 }
