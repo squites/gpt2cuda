@@ -62,17 +62,16 @@ void encoder(int B, int T, int C, float *wte, float *wpe, int *in, float *out) {
 }
 
 // Layer normalization over the embedding dimmension for each token in the sequence. For each token, calculate the mean and variance over the token embedding vector. In the end, each token of each batch will have it's own mean and variance values.
-#define eps 1e-5
-void layernorm(int B, int T, int C, float *in, float *out, float beta, float gamma) {
+void layernorm(int B, int T, int C, float *in, float *out, float gamma, float beta, float eps) { // gamma: weights, beta: bias (PyTorch)
+    //eps = 1e-5;
     for (int b = 0; b < B; b++) {
-        for (int t = 0; t < T; t++) {
-            float *in_ptr = in + b * T * C + t * C;
-        
+        for (int t = 0; t < T; t++) {               
+            float *in_ptr = in + b * T * C + t * C; // b*T*C: skips over the entire batch, because the batch contains T*C elements. 
+                                                    // t*C: skips over the elements of the token sequence and its embeddings.
             // calculate the mean
             float mean = 0.0f;
             for (int c = 0; c < C; c++) {
-                mean += in_ptr[c];
-                //mean += in[b * (T * C) + t * C + c]; // not right!
+                mean += in_ptr[c];  // + c: this access the 'c' embedding of token   
             }
             mean = mean/C;
 
@@ -83,10 +82,17 @@ void layernorm(int B, int T, int C, float *in, float *out, float beta, float gam
             }
             var = var/C;
 
+            // calculate the square-root of variance+epsilon
+            float sq = 1.0f / sqrtf(var + eps);
+
             // normalize (this works for each embedding value. We normalize each embedding value of the emb vector for each token)
-            //float eps = eps;
             float *out_ptr = out + b * T * C + t * C;
-            float x = (in[b * T + t] - mean) / (var + eps)*0.5; // out[b * T + t]
+            for (int c = 0; c < C; c++) {
+                float x = sq * (in[c]-mean);
+                // scale and shift
+                out_ptr[c] = x * gamma + beta;
+            }
+            // should I pass the gamma and beta as arrays? Then cache them to be easier to optimize them
         }
     }
 }
