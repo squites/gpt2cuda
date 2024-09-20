@@ -92,10 +92,12 @@ void layernorm(int B, int T, int C, float *in, float *out, float gamma, float be
                 // scale and shift
                 out_ptr[c] = x * gamma + beta;
             }
-            // should I pass the gamma and beta as arrays? Then cache them to be easier to optimize them
+            // should I pass the gamma and beta as arrays? Then cache them to be easier to optimize ... 
         }
     }
 }
+
+// void softmax(int B, int T, int C, float *logits, float *probs){};
 
 // simple cpu matmul calculation to compare with CUDA version
 void matmul_cpu(float *m, float *n, float *out, int row_m, int col_m, int col_n) {
@@ -117,13 +119,35 @@ void matmul_cpu(float *m, float *n, float *out, int row_m, int col_m, int col_n)
     // TODO: 
 //}
 
-float *init_matrix(int row, int col) {
+float *init_rand_matrix(int row, int col) {
     float *out = (float*)malloc(row * col * sizeof(float));
     for (int i = 0; i < row*col; i++) {
         out[i] = ((float)rand() / (float)RAND_MAX);
     }
     return out;
 }
+
+void self_attention(int B, int T, int C, float *wQ, float *wK, float *wV,
+                    float *in, float *out, int bias) { // still has more args to insert
+    // If I don't pass the wMatrices as parameters
+    float *wQ = init_rand_matrix(C, C); //(float*)malloc(C * C * sizeof(float));
+    float *wK = init_rand_matrix(C, C); //(float*)malloc(C * C * sizeof(float));
+    float *wV = init_rand_matrix(C, C); //(float*)malloc(C * C * sizeof(float));
+    
+    free(wQ); free(wK); free(wV);
+
+    float *queries = (float*)malloc(T * C * sizeof(float));
+    for (int b = 0; b < B; b++) {
+        for (int t = 0; t < T; t++) {
+            float *in_x = in + b * T * C + t * C;
+            //for (int c = 0; c < C; c++) {
+
+            //}
+            matmul_cpu(in_x, wQ, queries, T, C, C);
+        }
+    }
+}
+
 
 /*
 void self_attention(int B, int T, int C, float *in, float *out) {
@@ -191,6 +215,8 @@ int main() {
     // encode tokens
     char *str = "First Citizen: We are accounted poor citizens, the patricians good. What authority surfeits on would relieve us: if they would yield us but the superfluity, while it were wholesome, we might guess they relieved us humanely; but they think we are too dear: the leanness that afflicts us, the object of our misery, is as an inventory to particularise their abundance; our sufferance is a gain to them Let us revenge this with our pikes, ere we become rakes: for the gods know I ";
     //char *str = input; // input: passing the whole file
+    //char *small_str; 
+    //strncpy(small_str, str, 1000); small_str[1000] = '\0';
     int input_sz = strlen(str); // n
     printf("n: %d\n", input_sz);
     int *tokens = (int*)malloc(input_sz * sizeof(int));
@@ -257,6 +283,9 @@ int main() {
     free(train_data);
     free(test_data);
     free(x); free(y);
+
+    // self-attention free
+    // free(wQ); free(wK); free(wV);
 
     return 0;
 }
