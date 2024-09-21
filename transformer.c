@@ -119,7 +119,8 @@ void matmul_cpu(float *m, float *n, float *out, int row_m, int col_m, int col_n)
     // TODO: 
 //}
 
-float *init_rand_matrix(int row, int col) {
+// initialize random matrix projections for Q,K,V
+float *init_rand_proj(int row, int col) {
     float *out = (float*)malloc(row * col * sizeof(float));
     for (int i = 0; i < row*col; i++) {
         out[i] = ((float)rand() / (float)RAND_MAX);
@@ -127,25 +128,35 @@ float *init_rand_matrix(int row, int col) {
     return out;
 }
 
-void self_attention(int B, int T, int C, float *wQ, float *wK, float *wV,
+void self_attention(int B, int T, int C, //float *wQ, float *wK, float *wV,
                     float *in, float *out, int bias) { // still has more args to insert
     // If I don't pass the wMatrices as parameters
-    float *wQ = init_rand_matrix(C, C); //(float*)malloc(C * C * sizeof(float));
-    float *wK = init_rand_matrix(C, C); //(float*)malloc(C * C * sizeof(float));
-    float *wV = init_rand_matrix(C, C); //(float*)malloc(C * C * sizeof(float));
-    
-    free(wQ); free(wK); free(wV);
-
-    float *queries = (float*)malloc(T * C * sizeof(float));
+    // projections
+    float *wQ = init_rand_proj(C, C); //(float*)malloc(C * C * sizeof(float));
+    float *wK = init_rand_proj(C, C); //(float*)malloc(C * C * sizeof(float));
+    float *wV = init_rand_proj(C, C); //(float*)malloc(C * C * sizeof(float));
+    // query, key, value matrices
+    float *query = (float*)malloc(B * T * C * sizeof(float)); // (T, C). Should it be (B,T,C)?
+    float *key   = (float*)malloc(B * T * C * sizeof(float));
+    float *value = (float*)malloc(B * T * C * sizeof(float));
+    //  calculate the query, key, value matrices
     for (int b = 0; b < B; b++) {
         for (int t = 0; t < T; t++) {
-            float *in_x = in + b * T * C + t * C;
-            //for (int c = 0; c < C; c++) {
+            float *in_x = in + b * T * C + t * C; // skips to each embedding vector
+            float q, k, v = 0.0f;
+            for (int c = 0; c < C; c++) {
+                q += in_x[c] * wQ[c];
+                k += in_x[c] * wK[c];
+                v += in_x[c] * wV[c];
+            }
+            query[b*T*C+t*C] = q; // putting this outside for efficiency, avoiding wasteful memory access
+            key[b*T*C+t*C]   = k;
+            value[b*T*C+t*C] = v;
 
-            //}
-            matmul_cpu(in_x, wQ, queries, T, C, C);
         }
     }
+
+    free(wQ); free(wK); free(wV);
 }
 
 
