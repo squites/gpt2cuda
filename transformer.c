@@ -128,13 +128,14 @@ float *init_rand_proj(int row, int col) {
     return out;
 }
 
-void self_attention(int B, int T, int C, //float *wQ, float *wK, float *wV,
+void self_attention(int B, int T, int C, float *wQ, float *wK, float *wV,
                     float *in, float *out, int bias) { // still has more args to insert
-    // If I don't pass the wMatrices as parameters
+    // If I don't pass the wMatrices as parameters. I think the right thing is to pass the weight matrices in parameters.
     // projections
-    float *wQ = init_rand_proj(C, C); //(float*)malloc(C * C * sizeof(float));
-    float *wK = init_rand_proj(C, C); //(float*)malloc(C * C * sizeof(float));
-    float *wV = init_rand_proj(C, C); //(float*)malloc(C * C * sizeof(float));
+    //float *wQ = init_rand_proj(C, C); //(float*)malloc(C * C * sizeof(float));
+    //float *wK = init_rand_proj(C, C); //(float*)malloc(C * C * sizeof(float));
+    //float *wV = init_rand_proj(C, C); //(float*)malloc(C * C * sizeof(float));
+
     // query, key, value matrices
     float *query = (float*)malloc(B * T * C * sizeof(float)); // (T, C). Should it be (B,T,C)?
     float *key   = (float*)malloc(B * T * C * sizeof(float));
@@ -144,36 +145,26 @@ void self_attention(int B, int T, int C, //float *wQ, float *wK, float *wV,
         for (int t = 0; t < T; t++) {
             float *in_x = in + b * T * C + t * C; // skips to each embedding vector
             float q, k, v = 0.0f;
-            for (int c = 0; c < C; c++) {
-                q += in_x[c] * wQ[c];
-                k += in_x[c] * wK[c];
-                v += in_x[c] * wV[c];
+            
+            for (int i = 0; i < C; i++) {
+                for (int c = 0; c < C; c++) {
+                    q += in_x[c] * wQ[c * C + i]; // wrong! The indexing of wQ is wrong.  
+                    k += in_x[c] * wK[c * C + i];
+                    v += in_x[c] * wV[c * C + i];
+                }
             }
             query[b*T*C+t*C] = q; // putting this outside for efficiency, avoiding wasteful memory access
             key[b*T*C+t*C]   = k;
             value[b*T*C+t*C] = v;
 
         }
+        // calculate attention scores (query*key)
     }
 
     free(wQ); free(wK); free(wV);
+    free(query); free(key); free(value);
 }
 
-
-/*
-void self_attention(int B, int T, int C, float *in, float *out) {
-    float *wQ = init_matrix(C, C);
-    float *wK = init_matrix(C, C);
-    float *wV = init_matrix(C, C);
-
-    for (int b = 0; b < B; b++) {
-        for (int t = 0; t < T; t++) {
-
-        }
-    }
-        float *query = 
-}
-*/
 
 // function to split dataset tokens into train/test (90,10)%
 void split_data(int *tokens, int sz, int *train, int *test, int train_sz, int test_sz) {
@@ -283,6 +274,14 @@ int main() {
     }
     printf("\n");
     */
+
+   // self-attention
+   float *wQ = init_rand_proj(C, C);
+   float *wK = init_rand_proj(C, C);
+   float *wV = init_rand_proj(C, C);
+
+   
+
     
     // Free the allocated memory
     free(wte);
@@ -296,7 +295,8 @@ int main() {
     free(x); free(y);
 
     // self-attention free
-    // free(wQ); free(wK); free(wV);
+    free(wQ); free(wK); free(wV);
+
 
     return 0;
 }
