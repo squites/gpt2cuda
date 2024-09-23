@@ -128,6 +128,7 @@ float *init_rand_proj(int row, int col) {
     return out;
 }
 
+// single-head (for now)
 void self_attention(int B, int T, int C, float *wQ, float *wK, float *wV,
                     float *in, float *out, int bias) { // still has more args to insert
     // If I don't pass the wMatrices as parameters. I think the right thing is to pass the weight matrices in parameters.
@@ -146,11 +147,11 @@ void self_attention(int B, int T, int C, float *wQ, float *wK, float *wV,
             float *in_x = in + b * T * C + t * C; // skips to each embedding vector
             float q, k, v = 0.0f;
             
-            for (int i = 0; i < C; i++) {
+            for (int cw = 0; cw < C; cw++) {
                 for (int c = 0; c < C; c++) {
-                    q += in_x[c] * wQ[c * C + i]; // wrong! The indexing of wQ is wrong.  
-                    k += in_x[c] * wK[c * C + i];
-                    v += in_x[c] * wV[c * C + i];
+                    q += in_x[c] * wQ[c * C + cw]; // Don't get the indexing yet. Revisit after. Let's move on for now!
+                    k += in_x[c] * wK[c * C + cw];
+                    v += in_x[c] * wV[c * C + cw];
                 }
             }
             query[b*T*C+t*C] = q; // putting this outside for efficiency, avoiding wasteful memory access
@@ -158,7 +159,14 @@ void self_attention(int B, int T, int C, float *wQ, float *wK, float *wV,
             value[b*T*C+t*C] = v;
 
         }
-        // calculate attention scores (query*key)
+        // calculate attention scores dotproduct(query*key)
+        // every token has now a query and a key vector
+        float *att_scores = (float*)malloc(B * T * T * sizeof(float)); // attention_score is a single number for each token
+        for (int query_vec = 0; query_vec < T; query_vec++) {
+            for (int key_vec = 0; key_vec < T; key_vec++) {
+                att_scores
+            }
+        }
     }
 
     free(wQ); free(wK); free(wV);
