@@ -131,15 +131,17 @@ float *init_rand_proj(int row, int col) {
 // 2d transpose (copy or change the original matrix)
 float *transpose2d(float *m, int row, int col) {
     float *m_transpose = (float*)malloc(col * row * sizeof(float));
-    for (int r = 0; r < col; r++) {
-        for (int c = 0; c < row; c++) {
-            m_transpose[r * col + c] = m[c * row + r]; // is this right?
+    for (int i = 0; i < col; i++) {
+        for (int j = 0; j < row; j++) {
+            m_transpose[i * row + j] = m[j * row + i]; // I need to do m_transpose[i][j] = m[j][i]; This formula is right?
         }
     }
     return m_transpose;
 }
 
-// single-head (for now)
+// void causal_self_attn(); Implement later!
+
+// single-head (for now). Also this is only self-attention, and I need to implement the causal_self-attention.
 void self_attention(int B, int T, int C, float *wQ, float *wK, float *wV,
                     float *in, float *out, int bias) { // still has more args to insert
     // remember that each token_sequence will generate a query, key, value vector. One for each sequence
@@ -179,7 +181,9 @@ void self_attention(int B, int T, int C, float *wQ, float *wK, float *wV,
         // calculate attention scores dotproduct(query*key)
         // we can compute att_scores efficiently by stacking query and key vectors into 2 matrices, and multiplying query matrix with transposed key matrix
         float *att_scores = (float*)malloc(B * T * T * sizeof(float)); // attention_score is a single number for each token
+        // float *transpose_key = transpose(key, C, T);
         // basically: att_scores = query @ transpose(key); (B,T,C) @ (B,C,T) = (B,T,T)
+        // att_scores = query @ transpose_key;
     }
 
     free(wQ); free(wK); free(wV);
