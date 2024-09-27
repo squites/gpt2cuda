@@ -131,20 +131,22 @@ float *init_rand_proj(int row, int col) {
 // single-head (for now)
 void self_attention(int B, int T, int C, float *wQ, float *wK, float *wV,
                     float *in, float *out, int bias) { // still has more args to insert
-    // If I don't pass the wMatrices as parameters. I think the right thing is to pass the weight matrices in parameters.
+    // remember that each token_sequence will generate a query, key, value vector. One for each sequence
     // projections
-    //float *wQ = init_rand_proj(C, C); //(float*)malloc(C * C * sizeof(float));
+    //float *wQ = init_rand_proj(C, C); //(float*)malloc(C * C * sizeof(float)); 
     //float *wK = init_rand_proj(C, C); //(float*)malloc(C * C * sizeof(float));
     //float *wV = init_rand_proj(C, C); //(float*)malloc(C * C * sizeof(float));
 
+    // IMPORTANT!
+    // big understanding: when storing the tensor in the memory, only its embeddings are being stored, and not the tokens as well. I though it was stored as: [t0, e0, e1, t1, e0, e1,...]. In reality is [e0,e1,e0,e1]
     // query, key, value matrices
-    float *query = (float*)malloc(B * T * C * sizeof(float)); // (T, C). Should it be (B,T,C)?
+    float *query = (float*)malloc(B * T * C * sizeof(float)); // (B,T,C) @ (C,C) -> (B,T,C)
     float *key   = (float*)malloc(B * T * C * sizeof(float));
     float *value = (float*)malloc(B * T * C * sizeof(float));
     //  calculate the query, key, value matrices
     for (int b = 0; b < B; b++) {
         for (int t = 0; t < T; t++) {
-            float *in_x = in + b * T * C + t * C; // skips to each embedding vector
+            float *in_x = in + b * T * C + t * C; // skips to each embedding vector starting position
             float q, k, v = 0.0f;
             
             for (int cw = 0; cw < C; cw++) {
