@@ -128,18 +128,22 @@ float *init_rand_proj(int row, int col) {
     return out;
 }
 
-// 2d transpose (copy or change the original matrix)
-float *transpose2d(float *m, int row, int col) {
-    float *m_transpose = (float*)malloc(col * row * sizeof(float));
-    for (int i = 0; i < col; i++) {
-        for (int j = 0; j < row; j++) {
-            m_transpose[i * row + j] = m[j * row + i]; // I need to do m_transpose[i][j] = m[j][i]; This formula is right?
+// 2d transpose considering batch dim. Only transposes dims (-1,-2). (copy or change the original matrix)
+void transpose2d(float *m, float *m_transpose, int B, int row, int col) {
+    // maybe its not right, because we have to acknowledge the batches!
+    for (int b = 0; b < B; b++) {
+        // how to do the indexing right
+        for (int i = 0; i < col; i++) {
+            for (int j = 0; j < row; j++) {
+                m_transpose[i * row + j] = m[j * row + i]; // I need to do m_transpose[i][j] = m[j][i]; This formula is right?
+            }
         }
     }
-    return m_transpose;
 }
 
-// void causal_self_attn(); Implement later!
+// void softmax(); TODO
+
+// void causal_self_attn(); TODO
 
 // single-head (for now). Also this is only self-attention, and I need to implement the causal_self-attention.
 void self_attention(int B, int T, int C, float *wQ, float *wK, float *wV,
@@ -179,15 +183,30 @@ void self_attention(int B, int T, int C, float *wQ, float *wK, float *wV,
 
         }
         // computing attention scores dotproduct(query*key)
+        // the dot product takes 2 vectors and return 1 value. So each resulting value will correspond to the query[i] * key[j]
+        //float *att_scores = (float*)malloc(B * T * T * sizeof(float)); // attention_score is a single number for each token
+        //for (int i = 0; i < T; i++) { // loop through each key vector
+        //    for (int j = 0; j < T; j++) { // loop through each element of each key vector
+                
+        //    }
+        //}
         // we can compute att_scores efficiently by stacking query and key vectors into 2 matrices, and multiplying query matrix with transposed key matrix
-        float *att_scores = (float*)malloc(B * T * T * sizeof(float)); // attention_score is a single number for each token
-        // float *transpose_key = transpose(key, C, T);
-        // basically: att_scores = query @ transpose(key); (B,T,C) @ (B,C,T) = (B,T,T)
-        // att_scores = query @ transpose_key;
-    }
+        // compute query[i] * key[j] for j in range(n)
+        float *att_matrix = (float*)malloc(B * T * T * sizeof(float));
+        float *transpose_keys = (float*)malloc(B * T * T * sizeof(float));
+        transpose2d(key, transpose_keys, B, T, T); // transpose is not right yet
+        
+        float att_values = 0.0f;
+        for (int tx = 0; tx < T; tx++) {
+            for (int ty = 0; ty < C; ty++) {
+                att_values += query[b*T*C+tx*C+ty] * transpose_keys[ty*C+tx]; // (B,T,C) @ (B,C,T) = (B,T,T). (ty*C+tx) gets the column elements
+            }
+        }
+    } // batch loop
 
     free(wQ); free(wK); free(wV);
     free(query); free(key); free(value);
+    free(att_matrix); free(transpose_keys);
 }
 
 
