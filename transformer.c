@@ -178,7 +178,7 @@ void self_attention(int B, int T, int C, float *wQ, float *wK, float *wV,
             }
 
         }
-        // calculate attention scores dotproduct(query*key)
+        // computing attention scores dotproduct(query*key)
         // we can compute att_scores efficiently by stacking query and key vectors into 2 matrices, and multiplying query matrix with transposed key matrix
         float *att_scores = (float*)malloc(B * T * T * sizeof(float)); // attention_score is a single number for each token
         // float *transpose_key = transpose(key, C, T);
