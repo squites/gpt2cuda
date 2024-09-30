@@ -129,8 +129,7 @@ float *init_rand_proj(int row, int col) {
 }
 
 // 2d transpose considering batch dim. Only transposes dims (-1,-2). (copy or change the original matrix)
-void transpose2d(float *m, float *m_transpose, int B, int row, int col) {
-    // maybe its not right, because we have to acknowledge the batches!
+void transpose(float *m, float *m_transpose, int B, int row, int col) { // (B,row,col) -> (B,col,row)
     for (int b = 0; b < B; b++) {
         // how to do the indexing right
         for (int i = 0; i < col; i++) {
@@ -141,7 +140,23 @@ void transpose2d(float *m, float *m_transpose, int B, int row, int col) {
     }
 }
 
-// void softmax(); TODO
+void softmax(int B, int T, int C, float *logits, float *out) {
+    for (int b = 0; b < B; b++) {
+        for (int t = 0; t < T; t++) {
+            float *p = logits + b * T * C + t * C;
+            float *tmp = 0.0f;
+            float sum = 0.0f;
+            for (int c = 0; c < C; c++) {
+                //p[c] = expf(p[c]);
+                tmp[c] = expf(p[c]);
+                sum += tmp[c];   
+            }
+            for (int c = 0; c < C; c++) {
+                p[c] = tmp[c] / sum;
+            }
+        }
+    }
+}
 
 // void causal_self_attn(); TODO
 
@@ -194,7 +209,7 @@ void self_attention(int B, int T, int C, float *wQ, float *wK, float *wV,
         // compute query[i] * key[j] for j in range(n)
         float *att_matrix = (float*)malloc(B * T * T * sizeof(float));
         float *transpose_keys = (float*)malloc(B * T * T * sizeof(float));
-        transpose2d(key, transpose_keys, B, T, T); // transpose is not right yet
+        transpose(key, transpose_keys, B, T, T); // transpose is not right yet
         
         float att_values = 0.0f;
         for (int tx = 0; tx < T; tx++) {
