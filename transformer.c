@@ -158,7 +158,54 @@ void softmax(int B, int T, int C, float *logits, float *out) {
     }
 }
 
-// void causal_self_attn(); TODO
+/*
+void tril(float *att_scores, float *masked_att_scores) {
+    TODO;
+}
+
+void causal_self_attn(int B, int T, int C, float *wQ, float *wK, float *wV, float *in, float *out, int bias) {
+    float *query = (float*)malloc(B * T * C * sizeof(float));
+    float *key   = (float*)malloc(B * T * C * sizeof(float));
+    float *value = (float*)malloc(B * T * C * sizeof(float));
+    // calculate query,key,value matrices
+    for (int b = 0; b < B; b++) {
+        for (int t = 0; t < T; t++) {
+            float *ix = in + b * T * C + t * C;
+            float q, k, v = 0.0f;
+            // aggregate the values of each embedding
+            for (int cw = 0; cw < C; cw++) {
+                for (int c = 0; c < C; c++) {
+                    q += ix[c] * wQ[c * C + cw];
+                    k += ix[c] * wK[c * C + cw];
+                    v += ix[c] * wV[c * C + cw];
+                }
+            }
+            for (int i = 0; i < C; i++) {
+                query[b*T*C+t*C+i] = q;
+                key[b*T*C+t*C+i] = k;
+                value[b*T*C+t*C+i] = v;
+            }
+        }
+
+        // compute attention scores query@key.T
+        float *attn_matrix = (float*)malloc(B * T * T * sizeof(float));
+        float *transpose_key = (float*)malloc(B * T * T * sizeof(float));
+        float attn_vals = 0.0f;
+        // transpose key matrix
+        transpose(key, transpose_key, B, T, T);
+        //
+        for (int tx = 0; tx < T; tx++) {
+            for (int ty = 0; ty < T; ty++) {
+                attn_vals += query[b*T*C+tx*C+ty] * transpose_key[ty*C+tx];
+            }
+        }
+
+    }
+
+    free(query); free(key); free(value);
+    free(attn_matrix); free(transpose_key);
+}
+*/
 
 // single-head (for now). Also this is only self-attention, and I need to implement the causal_self-attention.
 void self_attention(int B, int T, int C, float *wQ, float *wK, float *wV,
@@ -166,8 +213,6 @@ void self_attention(int B, int T, int C, float *wQ, float *wK, float *wV,
     // remember that each token_sequence will generate a query, key, value vector. One for each sequence
     // projections
     //float *wQ = init_rand_proj(C, C); //(float*)malloc(C * C * sizeof(float)); 
-    //float *wK = init_rand_proj(C, C); //(float*)malloc(C * C * sizeof(float));
-    //float *wV = init_rand_proj(C, C); //(float*)malloc(C * C * sizeof(float));
 
     // IMPORTANT!
     // big understanding: when storing the tensor in the memory, only its embeddings are being stored, and not the tokens as well. 
@@ -200,11 +245,6 @@ void self_attention(int B, int T, int C, float *wQ, float *wK, float *wV,
         // computing attention scores dotproduct(query*key)
         // the dot product takes 2 vectors and return 1 value. So each resulting value will correspond to the query[i] * key[j]
         //float *att_scores = (float*)malloc(B * T * T * sizeof(float)); // attention_score is a single number for each token
-        //for (int i = 0; i < T; i++) { // loop through each key vector
-        //    for (int j = 0; j < T; j++) { // loop through each element of each key vector
-                
-        //    }
-        //}
         // we can compute att_scores efficiently by stacking query and key vectors into 2 matrices, and multiplying query matrix with transposed key matrix
         // compute query[i] * key[j] for j in range(n)
         float *att_matrix = (float*)malloc(B * T * T * sizeof(float));
