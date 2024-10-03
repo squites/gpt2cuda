@@ -158,9 +158,16 @@ void softmax(int B, int T, int C, float *logits, float *out) {
     }
 }
 
-/*
-void tril(float *att_scores, float *masked_att_scores) {
-    TODO;
+
+// creates a lower-triangular of the matrix
+void tril(float *attn_matrix, int row, int col) {
+    for (int x = 0; x < row; x++) {
+        for (int y = 0; y < col; y++) {
+            if (x < y) {
+                attn_matrix[x * row + y] = 0.0f;
+            }
+        }
+    }
 }
 
 void causal_self_attn(int B, int T, int C, float *wQ, float *wK, float *wV, float *in, float *out, int bias) {
@@ -194,9 +201,13 @@ void causal_self_attn(int B, int T, int C, float *wQ, float *wK, float *wV, floa
         // transpose key matrix
         transpose(key, transpose_key, B, T, T);
         //
+        float d_k = 1 / T**0.5; // 1/sqrtf(T);
         for (int tx = 0; tx < T; tx++) {
             for (int ty = 0; ty < T; ty++) {
                 attn_vals += query[b*T*C+tx*C+ty] * transpose_key[ty*C+tx];
+                // divide each value in attention matrix by sqrtf(d_k)
+                // mask the resulting matrix with tril(attn_matrix)
+
             }
         }
 
@@ -205,7 +216,7 @@ void causal_self_attn(int B, int T, int C, float *wQ, float *wK, float *wV, floa
     free(query); free(key); free(value);
     free(attn_matrix); free(transpose_key);
 }
-*/
+
 
 // single-head (for now). Also this is only self-attention, and I need to implement the causal_self-attention.
 void self_attention(int B, int T, int C, float *wQ, float *wK, float *wV,
