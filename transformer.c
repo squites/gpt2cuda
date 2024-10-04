@@ -405,7 +405,7 @@ int main() {
 
    
 
-    
+    // implement a function to free all allocated memory. Also implement a function to allocate all necessary memory before hand, to get more compact and neat.
     // Free the allocated memory
     free(wte);
     free(wpe);
