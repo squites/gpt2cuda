@@ -138,24 +138,26 @@ void transpose(float *m, float *m_transpose, int B, int row, int col) { // (B,ro
     }
 }
 
+// converts input to 0-1 values summing to 1
 void softmax(int B, int T, int C, float *logits, float *out) {
     for (int b = 0; b < B; b++) {
         for (int t = 0; t < T; t++) {
+            // ptr to get each b,t,c element
             float *p = logits + b * T * C + t * C;
-            float *tmp = 0.0f;
             float sum = 0.0f;
             for (int c = 0; c < C; c++) {
-                //p[c] = expf(p[c]);
-                tmp[c] = expf(p[c]);
-                sum += tmp[c];   
+                // exponentiate p[c]
+                p[c] = expf(p[c]);
+                // sums up to get the total value
+                sum += p[c];   
             }
             for (int c = 0; c < C; c++) {
-                p[c] = tmp[c] / sum;
+                // divide by the sum and store in 'out' tensor
+                out[c] = p[c] * (1/sum);
             }
         }
     }
 }
-
 
 // creates a lower-triangular of the matrix (working!)
 void tril(float *attn_matrix, int row, int col) {
@@ -227,7 +229,7 @@ void causal_self_attn(int B, int T, int C, float *wQ, float *wK, float *wV, floa
     free(attn_matrix); free(transpose_key);
 }
 
-
+/*
 // single-head (for now). Also this is only self-attention, and I need to implement the causal_self-attention.
 void self_attention(int B, int T, int C, float *wQ, float *wK, float *wV,
                     float *in, float *out, int bias) { // still has more args to insert
@@ -284,6 +286,7 @@ void self_attention(int B, int T, int C, float *wQ, float *wK, float *wV,
     free(query); free(key); free(value);
     free(att_matrix); free(transpose_keys);
 }
+*/
 
 
 // function to split dataset tokens into train/test (90,10)%
