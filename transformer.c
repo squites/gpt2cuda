@@ -201,7 +201,7 @@ void causal_self_attn(int B, int T, int C, float *wQ, float *wK, float *wV, floa
         // transpose key matrix
         transpose(key, transpose_key, B, T, T);
         //
-        float d_k = 1 / T**0.5; // 1/sqrtf(T);
+        float d_k = 1.0f / sqrtf(T); // 1/sqrtf(T);
         for (int tx = 0; tx < T; tx++) {
             for (int ty = 0; ty < T; ty++) {
                 attn_vals += query[b*T*C+tx*C+ty] * transpose_key[ty*C+tx];
