@@ -60,10 +60,10 @@ void encoder(int B, int T, int C, float *wte, float *wpe, int *in, float *out) {
         }
     }
 }
-
+// The general formula is that if you want to retrieve any element b,t,c, you compute the offset into Storage as b*T*C + t*C + c
 // Layer normalization over the embedding dimmension for each token in the sequence. For each token, calculate the mean and variance over the token embedding vector. In the end, each token of each batch will have it's own mean and variance values.
-void layernorm(int B, int T, int C, float *in, float *out, float gamma, float beta, float eps) { // gamma: weights, beta: bias (PyTorch)
-    //eps = 1e-5;
+void layernorm(int B, int T, int C, float *in, float *out, float gamma, float beta) { // gamma: weights, beta: bias (PyTorch)
+    const float eps = 1e-5;
     for (int b = 0; b < B; b++) {
         for (int t = 0; t < T; t++) {               
             float *in_ptr = in + b * T * C + t * C; // b*T*C: skips over the entire batch, because the batch contains T*C elements. 
@@ -88,7 +88,7 @@ void layernorm(int B, int T, int C, float *in, float *out, float gamma, float be
             // normalize (this works for each embedding value. We normalize each embedding value of the emb vector for each token)
             float *out_ptr = out + b * T * C + t * C;
             for (int c = 0; c < C; c++) {
-                float x = sq * (in[c]-mean);
+                float x = sq * (in[c]-mean); // not working the right way, not sure why.
                 // scale and shift
                 out_ptr[c] = x * gamma + beta;
             }
@@ -96,8 +96,6 @@ void layernorm(int B, int T, int C, float *in, float *out, float gamma, float be
         }
     }
 }
-
-// void softmax(int B, int T, int C, float *logits, float *probs){};
 
 // simple cpu matmul calculation to compare with CUDA version
 void matmul_cpu(float *m, float *n, float *out, int row_m, int col_m, int col_n) {
@@ -130,11 +128,11 @@ float *init_rand_proj(int row, int col) {
 
 // 2d transpose considering batch dim. Only transposes dims (-1,-2). (copy or change the original matrix)
 void transpose(float *m, float *m_transpose, int B, int row, int col) { // (B,row,col) -> (B,col,row)
-    for (int b = 0; b < B; b++) {
+    for (int b = 0; b < B; b++) { // not tested with multiple batches yet
         // how to do the indexing right
         for (int i = 0; i < col; i++) {
             for (int j = 0; j < row; j++) {
-                m_transpose[i * row + j] = m[j * row + i]; // I need to do m_transpose[i][j] = m[j][i]; This formula is right?
+                m_transpose[i * row + j] = m[j * col + i]; // I need to do m_transpose[i][j] = m[j][i]; This formula is right?
             }
         }
     }
@@ -159,7 +157,7 @@ void softmax(int B, int T, int C, float *logits, float *out) {
 }
 
 
-// creates a lower-triangular of the matrix
+// creates a lower-triangular of the matrix (working!)
 void tril(float *attn_matrix, int row, int col) {
     for (int x = 0; x < row; x++) {
         for (int y = 0; y < col; y++) {
@@ -200,8 +198,8 @@ void causal_self_attn(int B, int T, int C, float *wQ, float *wK, float *wV, floa
         float attn_vals = 0.0f;
         // transpose key matrix
         transpose(key, transpose_key, B, T, T);
-        //
-        float d_k = 1.0f / sqrtf(T); // 1/sqrtf(T);
+        // compute attention scores
+        float d = 1.0f / sqrtf(C);
         for (int tx = 0; tx < T; tx++) {
             for (int ty = 0; ty < T; ty++) {
                 attn_vals += query[b*T*C+tx*C+ty] * transpose_key[ty*C+tx];
