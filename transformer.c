@@ -180,7 +180,8 @@ void causal_self_attn(int B, int T, int C, float *wQ, float *wK, float *wV, floa
             // aggregate the values of each embedding
             for (int cw = 0; cw < C; cw++) {
                 for (int c = 0; c < C; c++) {
-                    q += ix[c] * wQ[c * C + cw];
+                    // wQ,wK,wV are the projections
+                    q += ix[c] * wQ[c * C + cw]; // (B,T,C)@(C,C) -> (B,T,C)
                     k += ix[c] * wK[c * C + cw];
                     v += ix[c] * wV[c * C + cw];
                 }
@@ -191,24 +192,35 @@ void causal_self_attn(int B, int T, int C, float *wQ, float *wK, float *wV, floa
                 value[b*T*C+t*C+i] = v;
             }
         }
+    }
 
-        // compute attention scores query@key.T
-        float *attn_matrix = (float*)malloc(B * T * T * sizeof(float));
-        float *transpose_key = (float*)malloc(B * T * T * sizeof(float));
-        float attn_vals = 0.0f;
-        // transpose key matrix
-        transpose(key, transpose_key, B, T, T);
-        // compute attention scores
-        float d = 1.0f / sqrtf(C);
+    // compute attention scores query@key.T -> (B,T,C)@(B,C,T) = (B,T,T)
+    float *attn_matrix = (float*)malloc(B * T * T * sizeof(float));   
+    float *transpose_key = (float*)malloc(B * C * T * sizeof(float));    
+    float attn_val = 0.0f;
+    // transpose key matrix
+    transpose(key, transpose_key, B, C, T); // (B,T,C) -> (B,C,T)
+    // compute attention scores
+    float d = 1.0f / sqrtf(C);
+    for (int b = 0; b < B; b++) {
         for (int tx = 0; tx < T; tx++) {
             for (int ty = 0; ty < T; ty++) {
-                attn_vals += query[b*T*C+tx*C+ty] * transpose_key[ty*C+tx];
-                // divide each value in attention matrix by sqrtf(d_k)
-                // mask the resulting matrix with tril(attn_matrix)
-
+                float attn_val = 0.0f;
+                for (int c = 0; c < C; c++) {
+                    // accumulate the dot product
+                    attn_val += query[b*T*C+tx*C+c] * transpose_key[b*C*T+c*T+ty];
+                }
+                // mask the resulting matrix with tril(attn_matrix) (maybe we don't need to create a function just for that)
+                if (tx < ty) attn_val = 0.0f;
+                // divide the value by sqrtf(d)
+                attn_val = attn_val * d;
+                // store into attn_matrix
+                attn_matrix[b*T*T+tx*T+ty] = attn_val;
             }
+            // softmax
+            // should softmax be called here? in llm.c is not, maybe because backward
+            
         }
-
     }
 
     free(query); free(key); free(value);
@@ -408,3 +420,9 @@ int main() {
 
     return 0;
 }
+
+
+/*
+Notes:
+- allocate all necessary memory before hand, into a single place
+*/
