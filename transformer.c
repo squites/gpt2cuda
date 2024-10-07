@@ -179,6 +179,7 @@ void tril(float *attn_matrix, int row, int col) {
     }
 }
 
+// Implement multi-head causal self-attention, treating each head as a dimension
 void causal_self_attn(int B, int T, int C, float *wQ, float *wK, float *wV, float *in, float *out, int bias) {
     float *query = (float*)malloc(B * T * C * sizeof(float));
     float *key   = (float*)malloc(B * T * C * sizeof(float));
@@ -296,6 +297,10 @@ void self_attention(int B, int T, int C, float *wQ, float *wK, float *wV,
     free(att_matrix); free(transpose_keys);
 }
 */
+
+void GELU() {
+    // TODO:
+}
 
 
 // function to split dataset tokens into train/test (90,10)%
@@ -436,5 +441,8 @@ int main() {
 
 /*
 Notes:
+TODO:
 - allocate all necessary memory before hand, into a single place
+- implement a simple DataLoader
+- group all the Net parameters into a struct
 */
