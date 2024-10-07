@@ -188,7 +188,7 @@ void causal_self_attn(int B, int T, int C, float *wQ, float *wK, float *wV, floa
     for (int b = 0; b < B; b++) {
         for (int t = 0; t < T; t++) {
             float *ix = in + b * T * C + t * C;
-            float q, k, v = 0.0f;
+            float q,k,v = 0.0f;
             // aggregate the values of each embedding
             for (int cw = 0; cw < C; cw++) {
                 for (int c = 0; c < C; c++) {
@@ -297,6 +297,18 @@ void self_attention(int B, int T, int C, float *wQ, float *wK, float *wV,
     free(att_matrix); free(transpose_keys);
 }
 */
+
+// skip connection where "input" is the original input, and "layer_out" is the out tensor of the layer that we're adding
+void residual_stream(int B, int T, int C, float *input, float *layer_out, float *out) {
+    for (int b = 0; b < B; b++) {
+        for (int t = 0; t < T; t++) {
+            for (int c = 0; c < C; c++) {
+                int ix = b * T * C + t * C + c;
+                out[ix] = input[ix] + layer_out[ix];
+            }
+        }
+    }
+}
 
 void GELU() {
     // TODO:
