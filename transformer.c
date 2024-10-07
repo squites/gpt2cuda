@@ -138,22 +138,31 @@ void transpose(float *m, float *m_transpose, int B, int row, int col) { // (B,ro
     }
 }
 
-// converts input to 0-1 values summing to 1
+// converts input to 0-1 values summing to 1. Turns to be a vector of probabilities. Input: (B,T,T). Softmax applies only on the last dimension
 void softmax(int B, int T, int C, float *logits, float *out) {
     for (int b = 0; b < B; b++) {
         for (int t = 0; t < T; t++) {
             // ptr to get each b,t,c element
             float *p = logits + b * T * C + t * C;
+            float *pout = out + b * T * C + t * C; 
             float sum = 0.0f;
+            float max_val = p[0];
+            
+            // for numerical stability, find the max_val to subtract them when expf
+            for (int c = 1; c < C; c++) {
+                if (p[c] > max_val) max_val = p[c];
+            }
+            // expf and calculate sum
             for (int c = 0; c < C; c++) {
                 // exponentiate p[c]
-                p[c] = expf(p[c]);
+                pout[c] = expf(p[c] - max_val);
                 // sums up to get the total value
-                sum += p[c];   
+                sum += pout[c];   
             }
-            for (int c = 0; c < C; c++) {
-                // divide by the sum and store in 'out' tensor
-                out[c] = p[c] * (1/sum);
+            // divide by the sum and store in 'pout' tensor
+            for (int c = 0; c < C; c++) {                
+                pout[c] /= sum;
+                //out[b*T*C+t*C+c] = pout[c] * (1/sum);
             }
         }
     }
