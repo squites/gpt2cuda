@@ -16,10 +16,10 @@
 /*
 typedef struct {
     int block_size = 256, // 1024 (actual gpt2 config)
-    int vocab_size = 65,  // 50257  
+    int vocab_size = 65,  // gpt_small:50257  
     int n_layer = 6,      // 12
     int n_head = 6,       // 12
-    int n_embd = 384,     // 768
+    int n_embd = 384,     // gpt_small:768 / gpt_medium:1024 / gpt_large:1280/ gpt_extra_large:1600
 } GPTConfig;
 */
 
@@ -44,6 +44,7 @@ char *read_file(char *filename) {
     return string;
 }
 
+// ----- Forward -----
 // Combine token embedding vector and positional embedding vector, encoding each token
 void encoder(int B, int T, int C, float *wte, float *wpe, int *in, float *out) {
     for (int b = 0; b < B; b++) { // loop over batches
@@ -112,10 +113,18 @@ void matmul_cpu(float *m, float *n, float *out, int row_m, int col_m, int col_n)
     }
 }
 
-// separate matmul into 2 functions so we can precisely calculate the time only in the matmul computation.
-//void call_matmul_cpu(float *m, float *n) {
-    // TODO: 
-//}
+// 2nd version of matmul
+void matmul_v2(float* x, float* w, float* bias, float* out, int B, int T, int C, int outC) {
+    // Basically 1st layer is (B,T,C) @ (C,4*C), only on MLP
+    // MLP has 2 layers ((B,T,C)@(C,C*4) = (B,T,C*4)) and ((B,T,C*4)@(C*4,C) = (B,T,C))
+    for (int b = 0; b < B; b++) {
+        for (int t = 0; t < T; t++) {
+            
+        }
+    }
+}
+
+
 
 // initialize random matrix projections for Q,K,V
 float *init_rand_proj(int row, int col) {
@@ -181,6 +190,11 @@ void tril(float *attn_matrix, int row, int col) {
 
 // Implement multi-head causal self-attention, treating each head as a dimension
 void causal_self_attn(int B, int T, int C, float *wQ, float *wK, float *wV, float *in, float *out, int bias) {
+    // 1) for each input token create a query,key,value vectors by multiplying by weight matrices wQ,wK,wV
+    // 2) multiply (dot prod.) current query vector, by only key vectors of previous tokens, to get the score of how well they match
+    // 3) multiply the scores by the value vectors, and then sum up
+    // 4) project
+    
     float *query = (float*)malloc(B * T * C * sizeof(float));
     float *key   = (float*)malloc(B * T * C * sizeof(float));
     float *value = (float*)malloc(B * T * C * sizeof(float));
@@ -313,6 +327,9 @@ void residual_stream(int B, int T, int C, float *input, float *layer_out, float 
 void GELU() {
     // TODO:
 }
+
+// ----- Backward ----- 
+
 
 
 // function to split dataset tokens into train/test (90,10)%
