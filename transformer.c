@@ -98,23 +98,6 @@ void layernorm(int B, int T, int C, float *in, float *out, float gamma, float be
     }
 }
 
-/*
-// simple cpu matmul calculation to compare with CUDA version
-void matmul_cpu(float *m, float *n, float *out, int row_m, int col_m, int col_n) {
-    float value = 0.0f;
-    for (int i = 0; i < row_m; i++) {
-        for (int j = 0; j < col_n; j++) {
-            //out[i*col_n+j] = 0.0f;
-            for (int k = 0; k < col_m; k++) {
-                //out[i*col_n+j] += m[i*col_m+k] * n[k*col_n+j];
-                value += m[i*col_m+k] * n[k*col_n+j];
-            }
-            out[i*col_n+j] = value;
-        }
-    }
-}
-*/
-
 // 2nd version of matmul
 void matmul_v2(const float* x, const float* w, const float* bias, float* out, 
                int B, int T, int C, int outC) {
@@ -125,7 +108,10 @@ void matmul_v2(const float* x, const float* w, const float* bias, float* out,
         for (int t = 0; t < T; t++) {
             int timeIdx = b * T + t; // get each row
             for (int oc = 0; oc < outC; oc++) {
-                if (bias) sumval = bias[oc];
+                if (bias == NULL) 
+                    sumval = 0.0f;
+                else
+                    sumval = bias[oc];
                 for (int c = 0; c < C; c++) {
                     sumval += x[timeIdx * C + c] * w[c + oc * C];
                 }
