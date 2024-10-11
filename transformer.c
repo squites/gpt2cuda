@@ -98,6 +98,7 @@ void layernorm(int B, int T, int C, float *in, float *out, float gamma, float be
     }
 }
 
+/*
 // simple cpu matmul calculation to compare with CUDA version
 void matmul_cpu(float *m, float *n, float *out, int row_m, int col_m, int col_n) {
     float value = 0.0f;
@@ -112,19 +113,27 @@ void matmul_cpu(float *m, float *n, float *out, int row_m, int col_m, int col_n)
         }
     }
 }
+*/
 
 // 2nd version of matmul
-void matmul_v2(float* x, float* w, float* bias, float* out, int B, int T, int C, int outC) {
+void matmul_v2(const float* x, const float* w, const float* bias, float* out, 
+               int B, int T, int C, int outC) {
     // Basically 1st layer is (B,T,C) @ (C,4*C), only on MLP
     // MLP has 2 layers ((B,T,C)@(C,C*4) = (B,T,C*4)) and ((B,T,C*4)@(C*4,C) = (B,T,C))
+    float sumval = 0.0f;
     for (int b = 0; b < B; b++) {
         for (int t = 0; t < T; t++) {
-            
+            int timeIdx = b * T + t; // get each row
+            for (int oc = 0; oc < outC; oc++) {
+                if (bias) sumval = bias[oc];
+                for (int c = 0; c < C; c++) {
+                    sumval += x[timeIdx * C + c] * w[c + oc * C];
+                }
+                out[timeIdx*outC+oc] = sumval;
+            }
         }
     }
 }
-
-
 
 // initialize random matrix projections for Q,K,V
 float *init_rand_proj(int row, int col) {
