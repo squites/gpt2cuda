@@ -172,17 +172,6 @@ void softmax(int B, int T, int C, float *logits, float *out) {
     }
 }
 
-// creates a lower-triangular of the matrix (working!)
-void tril(float *attn_matrix, int row, int col) {
-    for (int x = 0; x < row; x++) {
-        for (int y = 0; y < col; y++) {
-            if (x < y) {
-                attn_matrix[x * row + y] = 0.0f;
-            }
-        }
-    }
-}
-
 // Implement multi-head causal self-attention, treating each head as a dimension
 void causal_self_attn(int B, int T, int C, float *wQ, float *wK, float *wV, float *in, float *out, int bias) {
     // 1) for each input token create a query,key,value vectors by multiplying by weight matrices wQ,wK,wV
@@ -298,12 +287,7 @@ void self_attention(int B, int T, int C, float *wQ, float *wK, float *wV,
             for (int ty = 0; ty < C; ty++) {
                 att_values += query[b*T*C+tx*C+ty] * transpose_keys[ty*C+tx]; // (B,T,C) @ (B,C,T) = (B,T,T). (ty*C+tx) gets the column elements
             }
-        }
-    } // batch loop
-
-    free(wQ); free(wK); free(wV);
-    free(query); free(key); free(value);
-    free(att_matrix); free(transpose_keys);
+   
 }
 */
 
@@ -319,7 +303,29 @@ void residual_stream(int B, int T, int C, float *input, float *layer_out, float 
     }
 }
 
-void GELU() {
+// #define M_PI 3.14159265358979323846 (defined on math.h)
+// GELU(x) = 0.5x * (1 + tanh(sqrt(2/pi) * (x + 0.044715x?3)))      (more efficient! Simpler!) 
+void GELU_aprox(float *x, float *out, int n) {
+    for (int i = 0; i < n; i++) {
+        float x3 = x[i] * x[i] * x[i];  // (x?3)
+        float a = x[i] + 0.044715 * x3; // (x + 0.044715x?3)
+        float sqroot = sqrt(2 / M_PI);  // (sqrt(2/pi))
+        float b = 1 + tanh(sqroot);     // (1 + tanh(sqrt(2/pi)
+        out[i] = 0.5 * x[i] * b * a;
+    }
+}
+
+// GELU(x) = x * CDF(x) = x * ((1 + erf(x/sqrt(2))) / 2) OR x * 1/2[1+erf(x/sqrt(2))]
+void GELU_v2(float* x, float* out, int SIZE) {
+    for (int i = 0; i < SIZE; i++) {
+        float a = 1 + erf(x[i]/sqrt(2));
+        float b = 0.5 * a;
+        out[i] = x[i] * b;
+    }
+}
+
+
+void cross_entropy() {
     // TODO:
 }
 
