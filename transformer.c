@@ -13,16 +13,36 @@
 #define BLOCK_SZ 8 // T
 #define EMBD_SZ 4  // C
 
-/*
+// ----- GPT2 -----
 typedef struct {
-    int block_size = 256, // 1024 (actual gpt2 config)
+    int block_size = 256, // gpt_small:1024 (actual gpt2 config)
     int vocab_size = 65,  // gpt_small:50257  
-    int n_layer = 6,      // 12
-    int n_head = 6,       // 12
+    int n_layer = 6,      // gpt_small:12
+    int n_head = 6,       // gpt_small:12
     int n_embd = 384,     // gpt_small:768 / gpt_medium:1024 / gpt_large:1280/ gpt_extra_large:1600
-} GPTConfig;
-*/
+} Config;
 
+typedef struct {
+    // embedding
+    float *wte; // (vocab_size, n_embd) same as: (vocab_size, C)
+    float *wpe; // (block_size, n_embd) same as: (T, C)
+    // layernorm
+    float *lw; // (n_embd,) same as: (C,)
+    float *lb; // (n_embd,) same as: (C,)
+    // attention
+    //float *wQ;  // (n_embd, n_embd) same as: (C, C)
+    //float *wK;  // (n_embd, n_embd) same as: (C, C)
+    //float *wV;  // (n_embd, n_embd) same as: (C, C)
+    float *wQKV; // should be just one instead of wQ,wK,wV
+    float *bQKV;
+} Parameters;
+
+typedef struct {
+    // TODO:
+} Activations;
+
+
+// move this somewhere else (another file)
 char *read_file(char *filename) {
     FILE *fp = fopen(filename, "r");
     if (fp == NULL) return NULL;
@@ -44,7 +64,7 @@ char *read_file(char *filename) {
     return string;
 }
 
-// ----- Forward -----
+// ----- Forward pass functions -----
 // Combine token embedding vector and positional embedding vector, encoding each token
 void encoder(int B, int T, int C, float *wte, float *wpe, int *in, float *out) {
     for (int b = 0; b < B; b++) { // loop over batches
@@ -63,7 +83,7 @@ void encoder(int B, int T, int C, float *wte, float *wpe, int *in, float *out) {
 }
 // The general formula is that if you want to retrieve any element b,t,c, you compute the offset into Storage as b*T*C + t*C + c
 // Layer normalization over the embedding dimmension for each token in the sequence. For each token, calculate the mean and variance over the token embedding vector. In the end, each token of each batch will have it's own mean and variance values.
-void layernorm(int B, int T, int C, float *in, float *out, float gamma, float beta) { // gamma: weights, beta: bias (PyTorch)
+void layernorm(int B, int T, int C, float *in, float *out, float weight, float bias) { // gamma: weights, beta: bias (PyTorch)
     const float eps = 1e-5;
     for (int b = 0; b < B; b++) {
         for (int t = 0; t < T; t++) {               
@@ -91,7 +111,7 @@ void layernorm(int B, int T, int C, float *in, float *out, float gamma, float be
             for (int c = 0; c < C; c++) {
                 float x = sq * (in[c]-mean); // not working the right way, not sure why.
                 // scale and shift
-                out_ptr[c] = x * gamma + beta;
+                out_ptr[c] = x * weight + bias;
             }
             // should I pass the gamma and beta as arrays? Then cache them to be easier to optimize ... 
         }
@@ -99,7 +119,7 @@ void layernorm(int B, int T, int C, float *in, float *out, float gamma, float be
 }
 
 // 2nd version of matmul
-void matmul_v2(const float* x, const float* w, const float* bias, float* out, 
+void matmul(const float* x, const float* w, const float* bias, float* out, 
                int B, int T, int C, int outC) {
     // Basically 1st layer is (B,T,C) @ (C,4*C), only on MLP
     // MLP has 2 layers ((B,T,C)@(C,C*4) = (B,T,C*4)) and ((B,T,C*4)@(C*4,C) = (B,T,C))
@@ -108,10 +128,8 @@ void matmul_v2(const float* x, const float* w, const float* bias, float* out,
         for (int t = 0; t < T; t++) {
             int timeIdx = b * T + t; // get each row
             for (int oc = 0; oc < outC; oc++) {
-                if (bias == NULL) 
-                    sumval = 0.0f;
-                else
-                    sumval = bias[oc];
+                if (bias == NULL) sumval = 0.0f;
+                else sumval = bias[oc];
                 for (int c = 0; c < C; c++) {
                     sumval += x[timeIdx * C + c] * w[c + oc * C];
                 }
@@ -121,7 +139,8 @@ void matmul_v2(const float* x, const float* w, const float* bias, float* out,
     }
 }
 
-// initialize random matrix projections for Q,K,V
+/*
+// (REMOVE) - initialize random matrix projections for Q,K,V 
 float *init_rand_proj(int row, int col) {
     float *out = (float*)malloc(row * col * sizeof(float));
     for (int i = 0; i < row*col; i++) {
@@ -129,6 +148,7 @@ float *init_rand_proj(int row, int col) {
     }
     return out;
 }
+*/
 
 // 2d transpose considering batch dim. Only transposes dims (-1,-2). (copy or change the original matrix)
 void transpose(float *m, float *m_transpose, int B, int row, int col) { // (B,row,col) -> (B,col,row)
@@ -172,13 +192,12 @@ void softmax(int B, int T, int C, float *logits, float *out) {
     }
 }
 
-// Implement multi-head causal self-attention, treating each head as a dimension
+// TODO: Implement multi-head causal self-attention, treating each head as a dimension
 void causal_self_attn(int B, int T, int C, float *wQ, float *wK, float *wV, float *in, float *out, int bias) {
     // 1) for each input token create a query,key,value vectors by multiplying by weight matrices wQ,wK,wV
     // 2) multiply (dot prod.) current query vector, by only key vectors of previous tokens, to get the score of how well they match
     // 3) multiply the scores by the value vectors, and then sum up
     // 4) project
-    
     float *query = (float*)malloc(B * T * C * sizeof(float));
     float *key   = (float*)malloc(B * T * C * sizeof(float));
     float *value = (float*)malloc(B * T * C * sizeof(float));
@@ -239,11 +258,7 @@ void causal_self_attn(int B, int T, int C, float *wQ, float *wK, float *wV, floa
 
 /*
 // single-head (for now). Also this is only self-attention, and I need to implement the causal_self-attention.
-void self_attention(int B, int T, int C, float *wQ, float *wK, float *wV,
-                    float *in, float *out, int bias) { // still has more args to insert
     // remember that each token_sequence will generate a query, key, value vector. One for each sequence
-    // projections
-    //float *wQ = init_rand_proj(C, C); //(float*)malloc(C * C * sizeof(float)); 
 
     // IMPORTANT!
     // big understanding: when storing the tensor in the memory, only its embeddings are being stored, and not the tokens as well. 
@@ -287,7 +302,6 @@ void self_attention(int B, int T, int C, float *wQ, float *wK, float *wV,
             for (int ty = 0; ty < C; ty++) {
                 att_values += query[b*T*C+tx*C+ty] * transpose_keys[ty*C+tx]; // (B,T,C) @ (B,C,T) = (B,T,T). (ty*C+tx) gets the column elements
             }
-   
 }
 */
 
@@ -305,7 +319,7 @@ void residual_stream(int B, int T, int C, float *input, float *layer_out, float 
 
 // #define M_PI 3.14159265358979323846 (defined on math.h)
 // GELU(x) = 0.5x * (1 + tanh(sqrt(2/pi) * (x + 0.044715x?3)))      (more efficient! Simpler!) 
-void GELU_aprox(float *x, float *out, int n) {
+void GELU_aprox(float *x, float *out, int n) {  // refine after!
     for (int i = 0; i < n; i++) {
         float x3 = x[i] * x[i] * x[i];  // (x?3)
         float a = x[i] + 0.044715 * x3; // (x + 0.044715x?3)
@@ -315,24 +329,19 @@ void GELU_aprox(float *x, float *out, int n) {
     }
 }
 
-// GELU(x) = x * CDF(x) = x * ((1 + erf(x/sqrt(2))) / 2) OR x * 1/2[1+erf(x/sqrt(2))]
-void GELU_v2(float* x, float* out, int SIZE) {
-    for (int i = 0; i < SIZE; i++) {
-        float a = 1 + erf(x[i]/sqrt(2));
-        float b = 0.5 * a;
-        out[i] = x[i] * b;
-    }
+// function to calculate the loss over the softmax probabilities
+void cross_entropy_loss(float* loss, float* x, int* y) {
+    // ex: x[1, 2, 3, 4] 
+    //     y[3, 4, 5, 1]
+    // Loss(x,y) = -sum(xi * ln(yi))
+    
 }
 
+// ----- Backward pass functions ----- 
+//
+// ...
 
-void cross_entropy() {
-    // TODO:
-}
-
-// ----- Backward ----- 
-
-
-
+// ----- utils -----
 // function to split dataset tokens into train/test (90,10)%
 void split_data(int *tokens, int sz, int *train, int *test, int train_sz, int test_sz) {
     for (int i = 0; i < train_sz; i++) {
@@ -442,12 +451,10 @@ int main() {
     printf("\n");
     */
 
-   // self-attention
-   float *wQ = init_rand_proj(C, C);
-   float *wK = init_rand_proj(C, C);
-   float *wV = init_rand_proj(C, C);
-
-   
+    // self-attention
+    float *wQ = init_rand_proj(C, C);
+    float *wK = init_rand_proj(C, C);
+    float *wV = init_rand_proj(C, C);
 
     // implement a function to free all allocated memory. Also implement a function to allocate all necessary memory before hand, to get more compact and neat.
     // Free the allocated memory
@@ -468,11 +475,11 @@ int main() {
     return 0;
 }
 
-
 /*
 Notes:
 TODO:
 - allocate all necessary memory before hand, into a single place
 - implement a simple DataLoader
 - group all the Net parameters into a struct
+- do BPE encoding instead of character-level encoding
 */
