@@ -33,12 +33,15 @@ typedef struct {
     //float *wQ;  // (n_embd, n_embd) same as: (C, C)
     //float *wK;  // (n_embd, n_embd) same as: (C, C)
     //float *wV;  // (n_embd, n_embd) same as: (C, C)
-    float *wQKV; // should be just one instead of wQ,wK,wV
-    float *bQKV;
+    float *QKVw;  // should be just one instead of wQ,wK,wV. qkv should be stacked on top of each other
+    float *QKVb;  
 } Parameters;
 
 typedef struct {
-    // TODO:
+    // embedding
+    float *encoding; // (B, T, C)
+    // layernorm
+    float *la;       // (B, T, C)
 } Activations;
 
 
@@ -481,5 +484,5 @@ TODO:
 - allocate all necessary memory before hand, into a single place
 - implement a simple DataLoader
 - group all the Net parameters into a struct
-- do BPE encoding instead of character-level encoding
+- do BPE encoding instead of character-level encoding. I guess that's where the sentence padding comes in.
 */
