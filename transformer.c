@@ -39,9 +39,9 @@ typedef struct {
 
 typedef struct {
     // embedding
-    float *encoding; // (B, T, C)
+    float *encoding; // (B,T,C)
     // layernorm
-    float *la;       // (B, T, C)
+    float *la;       // (B,T,C)
 } Activations;
 
 
@@ -196,8 +196,8 @@ void softmax(int B, int T, int C, float *logits, float *out) {
 }
 
 // TODO: Implement multi-head causal self-attention, treating each head as a dimension
-void causal_self_attn(int B, int T, int C, float *wQ, float *wK, float *wV, float *in, float *out, int bias) {
-    // 1) for each input token create a query,key,value vectors by multiplying by weight matrices wQ,wK,wV
+void causal_self_attn(int B, int T, int C, float *wQ, float *wK, float *wV, float *in, float *out, int *bias) {
+    // 1) for each input token create a query,key,value vectors by multiplying inputs by weight matrices wQ,wK,wV
     // 2) multiply (dot prod.) current query vector, by only key vectors of previous tokens, to get the score of how well they match
     // 3) multiply the scores by the value vectors, and then sum up
     // 4) project
@@ -250,7 +250,7 @@ void causal_self_attn(int B, int T, int C, float *wQ, float *wK, float *wV, floa
                 attn_matrix[b*T*T+tx*T+ty] = attn_val;
             }
             // softmax
-            // should softmax be called here? in llm.c is not, maybe because backward
+            // should softmax be called here? Or should I call inside the model layers
             
         }
     }
@@ -485,4 +485,14 @@ TODO:
 - implement a simple DataLoader
 - group all the Net parameters into a struct
 - do BPE encoding instead of character-level encoding. I guess that's where the sentence padding comes in.
+
+Notes of self-attn:
+- 1) create q,k,v vectors (multiply input tokens by wQKV (C,C*3), generating a vector (C*3), then split into 3 vectors of size C, vector q, k, v)
+- 2) split each vector into attention heads. Each vector was size (C), now we split that vector into a matrix of (n_heads, C/n_heads)
+    - 2.1) basically, each head will have a vector of size (C/n_heads). One row of the matrix is the vector of that head, for each q,k,v "vector matrix" (NOT THE MATRIX wQ, wK, wV)
+- 3) score: generate scores on each head, by multiplying the q vector by all k vectors
+- 4) sum: then multiply each value with its score, then sum them up, producing the result of self-attention (C/n_heads) for one of the heads
+- 5) merge the attention heads: concatenate each score vector of each head, generating a a big vector of size (C)
+- 6) projecting: before sending this vector for the next sublayer, we multiply the vector size (C) by wO(C, C). We need a 4th weight matrix of size (C, C) to project.
+Doing all these, we have produced the vector that we can send to the next layer, which is the Feed Forward NN layer.
 */
