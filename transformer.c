@@ -42,6 +42,8 @@ typedef struct {
     float *encoding; // (B,T,C)
     // layernorm
     float *la;       // (B,T,C)
+    // attention
+    float *qkv;      // (B,T,T)
 } Activations;
 
 
@@ -196,11 +198,11 @@ void softmax(int B, int T, int C, float *logits, float *out) {
 }
 
 // TODO: Implement multi-head causal self-attention, treating each head as a dimension
-void causal_self_attn(int B, int T, int C, float *wQ, float *wK, float *wV, float *in, float *out, int *bias) {
+void causal_self_attn(int B, int T, int C, float *wQ, float *wK, float *wV, float *in, float *out, float *bias) {
     // 1) for each input token create a query,key,value vectors by multiplying inputs by weight matrices wQ,wK,wV
     // 2) multiply (dot prod.) current query vector, by only key vectors of previous tokens, to get the score of how well they match
     // 3) multiply the scores by the value vectors, and then sum up
-    // 4) project
+    // 4) projection
     float *query = (float*)malloc(B * T * C * sizeof(float));
     float *key   = (float*)malloc(B * T * C * sizeof(float));
     float *value = (float*)malloc(B * T * C * sizeof(float));
