@@ -197,6 +197,45 @@ void softmax(int B, int T, int C, float *logits, float *out) {
     }
 }
 
+// important: the input of this attention layer is the output of a linear layer, where it generates a tensor (B,T,C*3), where the C*3 dim contains wQ,wK,wV matrices.
+void multihead_attention(int B, int T, int C, int N_HEADS, float *in, float *out) {
+    // in shape is (B,T,C)
+    int C3 = C*3;
+    int head_size = C/N_HEADS;  
+
+    // sepated splits between qkv vectors and heads
+    for (int b = 0; b < B; b++) {
+        for (int t = 0; t < T; t++) {
+            // split into query, key, value vectors
+            float *query = in + b*T*C3 + t*C3;
+            float *key   = in + b*T*C3 + t*C3 + C;
+            float *value = in + b*T*C3 + t*C3 + (C*2);
+            // split into heads
+            for (int h = 0; h < N_HEADS; h++) {
+                float *qhead = query + h*head_size;
+                float *khead = key + h*head_size;
+                float *vhead = value + h*head_size;
+            }
+        }
+    }
+
+    // compacted version
+    for (int b = 0; b < B; b++) {
+        for (int t = 0; t < T; t++) {
+            for (int h = 0; h < N_HEADS; h++) {
+                // split into query, key, value vectors + split into heads
+                float *query = in + b*T*C3 + t*C3 + h*head_size;
+                float *key   = in + b*T*C3 + t*C3 + C + h*head_size;
+                float *value = in + b*T*C3 + t*C3 + (C*2) + h*head_size;
+            }
+        }
+
+    }
+}
+
+
+
+
 // TODO: Implement multi-head causal self-attention, treating each head as a dimension
 void causal_self_attn(int B, int T, int C, float *wQ, float *wK, float *wV, float *in, float *out, float *bias) {
     // 1) for each input token create a query,key,value vectors by multiplying inputs by weight matrices wQ,wK,wV
@@ -497,4 +536,19 @@ Notes of self-attn:
 - 5) merge the attention heads: concatenate each score vector of each head, generating a a big vector of size (C)
 - 6) projecting: before sending this vector for the next sublayer, we multiply the vector size (C) by wO(C, C). We need a 4th weight matrix of size (C, C) to project.
 Doing all these, we have produced the vector that we can send to the next layer, which is the Feed Forward NN layer.
+
+
+
+---- FLOW of the data -----
+    * embeddings: generate token emb + pos emb, resulting in a (B,T,C) tensor
+    * layernorm: the (B,T,C) tensor goes to layernorm, where it normalizes over the embeddings of each sequence,
+                 resulting in (B,T,C) tensor.
+    * linear: the normalized tensor (B,T,C) goes to a linear layer of (C,C*3). This is the wQ,wK,wV matrices, they're
+              are glued together. So, in the linear layer we're muliplying the normalized input by the weight matrices
+              (B,T,C) @ (C,C*3) resulting in (B,T,C*3). That's going to be the input in the attention block
+    * Attention: 1) we split the (B,T,C*3) input into query(B,T,C) key(B,T,C) and value(B,T,C). So split by 3 (NOT n_heads. n_heads is to use inside attention, which is the Number of attention heads)
+                 2) split query,key,value into n_heads. Ex: if query(B,T,C=768) and we want 12 attention heads, if we
+                    divide 768/12 = 64, so we'll have a matrix (12x64) where each row is a head.
+
+
 */
