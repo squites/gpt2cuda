@@ -14,12 +14,13 @@
 #define EMBD_SZ 4  // C
 
 // ----- GPT2 -----
+// gpt_small: 124M 
 typedef struct {
-    int block_size = 256, // gpt_small:1024 (actual gpt2 config)
-    int vocab_size = 65,  // gpt_small:50257  
-    int n_layer = 6,      // gpt_small:12
-    int n_head = 6,       // gpt_small:12
-    int n_embd = 384,     // gpt_small:768 / gpt_medium:1024 / gpt_large:1280/ gpt_extra_large:1600
+    int block_size = 256,   // gpt_small:1024 (actual gpt2 config)
+    int vocab_size = 65,    // gpt_small:50257  
+    int n_layers = 6,       // gpt_small:12
+    int n_heads = 6,        // gpt_small:12
+    int n_embd = 384,       // gpt_small:768 / gpt_medium:1024 / gpt_large:1280/ gpt_extra_large:1600
 } Config;
 
 typedef struct {
@@ -198,18 +199,26 @@ void softmax(int B, int T, int C, float *logits, float *out) {
 }
 
 // important: the input of this attention layer is the output of a linear layer, where it generates a tensor (B,T,C*3), where the C*3 dim contains wQ,wK,wV matrices.
-void multihead_attention(int B, int T, int C, int N_HEADS, float *in, float *out) {
+void multihead_attention(int B, int T, int C, int N_HEADS, 
+                         float *qkv, float *out, float *preatt_tmp, float *posatt) {
     // in shape is (B,T,C)
+    // notes llm.c parameters:
+    // - inp(B,T,C*3): contains the query,key,value vectors. 3C is the concatenated Q,K,V for each token
+    // - preatt(B,NH,T,T): pre attention scores. Holds the dotproduct between queries and keys. Before is sent to softmax (unormalized)
+    // - att(B,NH,T,C): post attention scores. Stores the attention weights after the softmax
+    // -
+
     int C3 = C*3;
     int head_size = C/N_HEADS;  
 
     // sepated splits between qkv vectors and heads
+    /*
     for (int b = 0; b < B; b++) {
         for (int t = 0; t < T; t++) {
             // split into query, key, value vectors
-            float *query = in + b*T*C3 + t*C3;
-            float *key   = in + b*T*C3 + t*C3 + C;
-            float *value = in + b*T*C3 + t*C3 + (C*2);
+            float *query = qkv + b*T*C3 + t*C3;
+            float *key   = qkv + b*T*C3 + t*C3 + C;
+            float *value = qkv + b*T*C3 + t*C3 + (C*2);
             // split into heads
             for (int h = 0; h < N_HEADS; h++) {
                 float *qhead = query + h*head_size; // here is basically, each h is a row of the query matrix
@@ -222,18 +231,38 @@ void multihead_attention(int B, int T, int C, int N_HEADS, float *in, float *out
             }
         }
     }
+    */
 
     // compacted version
     for (int b = 0; b < B; b++) {
         for (int t = 0; t < T; t++) {
             for (int h = 0; h < N_HEADS; h++) {
-                // 1) split into query, key, value vectors + split into heads
-                float *query = in + b*T*C3 + t*C3 + h*head_size; // h*head_size is the offset for each head
-                float *key   = in + b*T*C3 + t*C3 + C + h*head_size; // maybe I can't have these keys here, since one query multiplies by all the other keys
-                float *value = in + b*T*C3 + t*C3 + (C*2) + h*head_size;
-                
-                // 2) scoring
+                // 1) split into query, key, value vectors + split into heads (this query is for the token t on head h)
+                float *query = qkv + b*T*C3 + t*C3 + h*head_size; // h*head_size is the offset for each head
+                //float *key   = qkv + b*T*C3 + t*C3 + C + h*head_size; // maybe I can't have these keys here, since one query multiplies by all the other keys
+                //float *value = qkv + b*T*C3 + t*C3 + (C*2) + h*head_size;
+                float *preatt = preatt_tmp + b*N_HEADS*T*T + h*T*T + t*T;
 
+                // 2) scoring
+                for (int tok = 0; tok < T; tok++) {
+                    float *key = qkv + b*T*C3 + tok*C3 + C + h*head_size; // gets the key vector of token 'tok' of head h
+                    float val = 0.0f;
+                    // since its divided by heads, instead of the whole C, now we loop through C/N_HEADS, which is 'head_size'
+                    if (tok < t) {    
+                        for (int i = 0; i < head_size; i++) {
+                            val += query[i] * key[i];
+                        }
+                        // scale
+                        val *= (1/sqrtf(head_size));
+                    } else {
+                        val = 0.0f;
+                    }
+                    preatt[tok] = val;
+                    // scale: dhead = C/n_heads. scale = 1/sqrtf(dhead)
+                    // val *= (1/sqrtf(head_size));
+                    // mask
+                    // if (tok > t) val = 0.0f;
+                }
             }
         }
 
