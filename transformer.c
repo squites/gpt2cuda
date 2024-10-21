@@ -212,9 +212,13 @@ void multihead_attention(int B, int T, int C, int N_HEADS, float *in, float *out
             float *value = in + b*T*C3 + t*C3 + (C*2);
             // split into heads
             for (int h = 0; h < N_HEADS; h++) {
-                float *qhead = query + h*head_size;
+                float *qhead = query + h*head_size; // here is basically, each h is a row of the query matrix
                 float *khead = key + h*head_size;
                 float *vhead = value + h*head_size;
+                
+                // scoring
+
+
             }
         }
     }
@@ -223,10 +227,13 @@ void multihead_attention(int B, int T, int C, int N_HEADS, float *in, float *out
     for (int b = 0; b < B; b++) {
         for (int t = 0; t < T; t++) {
             for (int h = 0; h < N_HEADS; h++) {
-                // split into query, key, value vectors + split into heads
-                float *query = in + b*T*C3 + t*C3 + h*head_size;
-                float *key   = in + b*T*C3 + t*C3 + C + h*head_size;
+                // 1) split into query, key, value vectors + split into heads
+                float *query = in + b*T*C3 + t*C3 + h*head_size; // h*head_size is the offset for each head
+                float *key   = in + b*T*C3 + t*C3 + C + h*head_size; // maybe I can't have these keys here, since one query multiplies by all the other keys
                 float *value = in + b*T*C3 + t*C3 + (C*2) + h*head_size;
+                
+                // 2) scoring
+
             }
         }
 
@@ -546,7 +553,8 @@ Doing all these, we have produced the vector that we can send to the next layer,
     * linear: the normalized tensor (B,T,C) goes to a linear layer of (C,C*3). This is the wQ,wK,wV matrices, they're
               are glued together. So, in the linear layer we're muliplying the normalized input by the weight matrices
               (B,T,C) @ (C,C*3) resulting in (B,T,C*3). That's going to be the input in the attention block
-    * Attention: 1) we split the (B,T,C*3) input into query(B,T,C) key(B,T,C) and value(B,T,C). So split by 3 (NOT n_heads. n_heads is to use inside attention, which is the Number of attention heads)
+    * Attention: 1) we split the (B,T,C*3) input into query(B,T,C) key(B,T,C) and value(B,T,C). So split by 3 
+                    (NOT n_heads. n_heads is to use inside attention, which is the Number of attention heads)
                  2) split query,key,value into n_heads. Ex: if query(B,T,C=768) and we want 12 attention heads, if we
                     divide 768/12 = 64, so we'll have a matrix (12x64) where each row is a head.
 
