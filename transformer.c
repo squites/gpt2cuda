@@ -199,51 +199,27 @@ void softmax(int B, int T, int C, float *logits, float *out) {
 }
 
 // important: the input of this attention layer is the output of a linear layer, where it generates a tensor (B,T,C*3), where the C*3 dim contains wQ,wK,wV matrices.
-void multihead_attention(int B, int T, int C, int N_HEADS, 
-                         float *qkv, float *out, float *preatt_tmp, float *posatt) {
+void multihead_attention(int B, int T, int C, int NHEADS, 
+                         float *qkv, float *out, float *before_softmax, float *softmax_scores) {
     // in shape is (B,T,C)
     // notes llm.c parameters:
     // - inp(B,T,C*3): contains the query,key,value vectors. 3C is the concatenated Q,K,V for each token
     // - preatt(B,NH,T,T): pre attention scores. Holds the dotproduct between queries and keys. Before is sent to softmax (unormalized)
     // - att(B,NH,T,C): post attention scores. Stores the attention weights after the softmax
     // -
-
     int C3 = C*3;
-    int head_size = C/N_HEADS;  
+    int head_size = C/NHEADS;  
 
-    // sepated splits between qkv vectors and heads
-    /*
     for (int b = 0; b < B; b++) {
         for (int t = 0; t < T; t++) {
-            // split into query, key, value vectors
-            float *query = qkv + b*T*C3 + t*C3;
-            float *key   = qkv + b*T*C3 + t*C3 + C;
-            float *value = qkv + b*T*C3 + t*C3 + (C*2);
-            // split into heads
-            for (int h = 0; h < N_HEADS; h++) {
-                float *qhead = query + h*head_size; // here is basically, each h is a row of the query matrix
-                float *khead = key + h*head_size;
-                float *vhead = value + h*head_size;
-                
-                // scoring
-
-
-            }
-        }
-    }
-    */
-
-    // compacted version
-    for (int b = 0; b < B; b++) {
-        for (int t = 0; t < T; t++) {
-            for (int h = 0; h < N_HEADS; h++) {
+            for (int h = 0; h < NHEADS; h++) {
                 // 1) split into query, key, value vectors + split into heads (this query is for the token t on head h)
                 float *query = qkv + b*T*C3 + t*C3 + h*head_size; // h*head_size is the offset for each head
-                //float *key   = qkv + b*T*C3 + t*C3 + C + h*head_size; // maybe I can't have these keys here, since one query multiplies by all the other keys
-                //float *value = qkv + b*T*C3 + t*C3 + (C*2) + h*head_size;
-                float *preatt = preatt_tmp + b*N_HEADS*T*T + h*T*T + t*T;
+                float *preatt = before_softmax + b*NHEADS*T*T + h*T*T + t*T;
+                float *att_scores = softmax_scores + b*NHEADS*T*T + h*T*T + t*T;
 
                 // 2) scoring
+                float maxval = 0.0f; //preatt[0]; //0.0f;
                 for (int tok = 0; tok < T; tok++) {
                     float *key = qkv + b*T*C3 + tok*C3 + C + h*head_size; // gets the key vector of token 'tok' of head h
                     float val = 0.0f;
@@ -254,29 +230,60 @@ void multihead_attention(int B, int T, int C, int N_HEADS,
                         }
                         // scale
                         val *= (1/sqrtf(head_size));
+                        if (val > maxval) maxval = val;
                     } else {
                         // mask
                         val = 0.0f;
                     }
                     preatt[tok] = val;
-                    // scale: dhead = C/n_heads. scale = 1/sqrtf(dhead)
-                    // val *= (1/sqrtf(head_size));
-                    // mask
-                    // if (tok > t) val = 0.0f;
                 }
 
                 // 3) softmax
                 float sum = 0.0f;
-                for (int tok = 0; tok < T; tok++) {
+                for (int tok = 0; tok <= t; tok++) {
                     float exp = expf(preatt[tok] - maxval); // maxval for numerical stability
-                    sum += exp
+                    sum += exp;
+                }
+
+                for (int tok = 0; tok < T; tok++) {
+                    att_scores[tok] *= (1.0f/sum);
+                }
+
+                // 4) aggregate
+                float *outp = out + b*T*C + t*C + h*head_size;
+                // initialize with 0s
+                for (int i = 0; i < head_size; i++) {
+                    outp[i] = 0.0f;
+                }
+                // accumulate
+                for (int tok = 0; tok < T; tok++) {
+                    float *value = qkv + b*T*C3 + t*C3 + (C*2) + h*head_size;
+                    for (int i = 0; i < head_size; i++) {
+                        outp[i] += att_scores[i] * value[i];
+                    }
                 }
             }
         }
-
     }
 }
-
+/*
+  // for numerical stability, find the max_val to subtract them when expf
+            for (int c = 1; c < C; c++) {
+                if (p[c] > max_val) max_val = p[c];
+            }
+            // expf and calculate sum
+            for (int c = 0; c < C; c++) {
+                // exponentiate p[c]
+                pout[c] = expf(p[c] - max_val);
+                // sums up to get the total value
+                sum += pout[c];   
+            }
+            // divide by the sum and store in 'pout' tensor
+            for (int c = 0; c < C; c++) {                
+                pout[c] /= sum;
+                //out[b*T*C+t*C+c] = pout[c] * (1/sum);
+            }
+*/
 
 
 
