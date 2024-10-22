@@ -255,6 +255,7 @@ void multihead_attention(int B, int T, int C, int N_HEADS,
                         // scale
                         val *= (1/sqrtf(head_size));
                     } else {
+                        // mask
                         val = 0.0f;
                     }
                     preatt[tok] = val;
@@ -262,6 +263,13 @@ void multihead_attention(int B, int T, int C, int N_HEADS,
                     // val *= (1/sqrtf(head_size));
                     // mask
                     // if (tok > t) val = 0.0f;
+                }
+
+                // 3) softmax
+                float sum = 0.0f;
+                for (int tok = 0; tok < T; tok++) {
+                    float exp = expf(preatt[tok] - maxval); // maxval for numerical stability
+                    sum += exp
                 }
             }
         }
