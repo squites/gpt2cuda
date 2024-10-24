@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
 #include <stdbool.h>
 #include <time.h>
@@ -16,11 +17,11 @@
 // ----- GPT2 -----
 // gpt_small: 124M 
 typedef struct {
-    int block_size = 256,   // gpt_small:1024 (actual gpt2 config)
-    int vocab_size = 65,    // gpt_small:50257  
-    int n_layers = 6,       // gpt_small:12
-    int n_heads = 6,        // gpt_small:12
-    int n_embd = 384,       // gpt_small:768 / gpt_medium:1024 / gpt_large:1280/ gpt_extra_large:1600
+    uint32_t block_size = 256;   // gpt_small:1024 (actual gpt2 config)
+    uint32_t vocab_size = 65;    // gpt_small:50257  
+    uint32_t n_layers = 6;       // gpt_small:12
+    uint32_t n_heads = 6;        // gpt_small:12
+    uint32_t n_embd = 384;       // gpt_small:768 / gpt_medium:1024 / gpt_large:1280/ gpt_extra_large:1600
 } Config;
 
 typedef struct {
@@ -47,6 +48,9 @@ typedef struct {
     float *qkv;      // (B,T,T)
 } Activations;
 
+struct GPT2_layers {
+    // TODO:
+};
 
 // move this somewhere else (another file)
 char *read_file(char *filename) {
@@ -87,6 +91,7 @@ void encoder(int B, int T, int C, float *wte, float *wpe, int *in, float *out) {
         }
     }
 }
+
 // The general formula is that if you want to retrieve any element b,t,c, you compute the offset into Storage as b*T*C + t*C + c
 // Layer normalization over the embedding dimmension for each token in the sequence. For each token, calculate the mean and variance over the token embedding vector. In the end, each token of each batch will have it's own mean and variance values.
 void layernorm(int B, int T, int C, float *in, float *out, float weight, float bias) { // gamma: weights, beta: bias (PyTorch)
@@ -124,9 +129,9 @@ void layernorm(int B, int T, int C, float *in, float *out, float weight, float b
     }
 }
 
-// 2nd version of matmul
-void matmul(const float* x, const float* w, const float* bias, float* out, 
-               int B, int T, int C, int outC) {
+// linear layer
+void matmul(int B, int T, int C, int outC, 
+            const float* x, const float* w, const float* bias, float* out) {
     // Basically 1st layer is (B,T,C) @ (C,4*C), only on MLP
     // MLP has 2 layers ((B,T,C)@(C,C*4) = (B,T,C*4)) and ((B,T,C*4)@(C*4,C) = (B,T,C))
     float sumval = 0.0f;
@@ -140,59 +145,6 @@ void matmul(const float* x, const float* w, const float* bias, float* out,
                     sumval += x[timeIdx * C + c] * w[c + oc * C];
                 }
                 out[timeIdx*outC+oc] = sumval;
-            }
-        }
-    }
-}
-
-/*
-// (REMOVE) - initialize random matrix projections for Q,K,V 
-float *init_rand_proj(int row, int col) {
-    float *out = (float*)malloc(row * col * sizeof(float));
-    for (int i = 0; i < row*col; i++) {
-        out[i] = ((float)rand() / (float)RAND_MAX);
-    }
-    return out;
-}
-*/
-
-// 2d transpose considering batch dim. Only transposes dims (-1,-2). (copy or change the original matrix)
-void transpose(float *m, float *m_transpose, int B, int row, int col) { // (B,row,col) -> (B,col,row)
-    for (int b = 0; b < B; b++) { // not tested with multiple batches yet
-        // how to do the indexing right
-        for (int i = 0; i < col; i++) {
-            for (int j = 0; j < row; j++) {
-                m_transpose[i * row + j] = m[j * col + i]; // I need to do m_transpose[i][j] = m[j][i]; This formula is right?
-            }
-        }
-    }
-}
-
-// converts input to 0-1 values summing to 1. Turns to be a vector of probabilities. Input: (B,T,T). Softmax applies only on the last dimension
-void softmax(int B, int T, int C, float *logits, float *out) {
-    for (int b = 0; b < B; b++) {
-        for (int t = 0; t < T; t++) {
-            // ptr to get each b,t,c element
-            float *p = logits + b * T * C + t * C;
-            float *pout = out + b * T * C + t * C; 
-            float sum = 0.0f;
-            float max_val = p[0];
-            
-            // for numerical stability, find the max_val to subtract them when expf
-            for (int c = 1; c < C; c++) {
-                if (p[c] > max_val) max_val = p[c];
-            }
-            // expf and calculate sum
-            for (int c = 0; c < C; c++) {
-                // exponentiate p[c]
-                pout[c] = expf(p[c] - max_val);
-                // sums up to get the total value
-                sum += pout[c];   
-            }
-            // divide by the sum and store in 'pout' tensor
-            for (int c = 0; c < C; c++) {                
-                pout[c] /= sum;
-                //out[b*T*C+t*C+c] = pout[c] * (1/sum);
             }
         }
     }
@@ -268,6 +220,59 @@ void multihead_attention(int B, int T, int C, int NHEADS,
                         outp[i] += att_scores[i] * value[i];
                     }
                 }
+            }
+        }
+    }
+}
+
+// converts input to 0-1 values summing to 1. Turns to be a vector of probabilities. Input: (B,T,T). Softmax applies only on the last dimension
+void softmax(int B, int T, int C, float *logits, float *out) {
+    for (int b = 0; b < B; b++) {
+        for (int t = 0; t < T; t++) {
+            // ptr to get each b,t,c element
+            float *p = logits + b * T * C + t * C;
+            float *pout = out + b * T * C + t * C; 
+            float sum = 0.0f;
+            float max_val = p[0];
+            
+            // for numerical stability, find the max_val to subtract them when expf
+            for (int c = 1; c < C; c++) {
+                if (p[c] > max_val) max_val = p[c];
+            }
+            // expf and calculate sum
+            for (int c = 0; c < C; c++) {
+                // exponentiate p[c]
+                pout[c] = expf(p[c] - max_val);
+                // sums up to get the total value
+                sum += pout[c];   
+            }
+            // divide by the sum and store in 'pout' tensor
+            for (int c = 0; c < C; c++) {                
+                pout[c] /= sum;
+                //out[b*T*C+t*C+c] = pout[c] * (1/sum);
+            }
+        }
+    }
+}
+
+/*
+// (REMOVE) - initialize random matrix projections for Q,K,V 
+float *init_rand_proj(int row, int col) {
+    float *out = (float*)malloc(row * col * sizeof(float));
+    for (int i = 0; i < row*col; i++) {
+        out[i] = ((float)rand() / (float)RAND_MAX);
+    }
+    return out;
+}
+*/
+
+// 2d transpose considering batch dim. Only transposes dims (-1,-2). (copy or change the original matrix)
+void transpose(float *m, float *m_transpose, int B, int row, int col) { // (B,row,col) -> (B,col,row)
+    for (int b = 0; b < B; b++) { // not tested with multiple batches yet
+        // how to do the indexing right
+        for (int i = 0; i < col; i++) {
+            for (int j = 0; j < row; j++) {
+                m_transpose[i * row + j] = m[j * col + i]; // I need to do m_transpose[i][j] = m[j][i]; This formula is right?
             }
         }
     }
