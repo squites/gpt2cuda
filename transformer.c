@@ -42,7 +42,7 @@ typedef struct {
     // embedding
     float *encoding; // (B,T,C)
     // layernorm
-    float *la;       // (B,T,C)
+    float *lactv;       // (B,T,C)
     // attention
     float *qkv;      // (B,T,T)
 } Activations;
@@ -71,7 +71,7 @@ char *read_file(char *filename) {
 }
 
 // ----- Forward pass functions -----
-// Combine token embedding vector and positional embedding vector, encoding each token
+// Combine token embedding vector + positional embedding vector to encode each token
 void encoder(int B, int T, int C, float *wte, float *wpe, int *in, float *out) {
     for (int b = 0; b < B; b++) { // loop over batches
         for (int t = 0; t < T; t++) { // loop over each token in the batch
@@ -225,8 +225,7 @@ void multihead_attention(int B, int T, int C, int NHEADS,
                 for (int tok = 0; tok <= t; tok++) {
                     float *key = qkv + b*T*C3 + tok*C3 + C + h*head_size; // gets the key vector of token 'tok' of head h
                     float val = 0.0f;
-                    // since its divided by heads, instead of the whole C, now we loop through C/N_HEADS, which is 'head_size'
-                    //if (tok <= t) {    
+                    // since its divided by heads, instead of the whole C, now we loop through C/N_HEADS, which is 'head_size' 
                     for (int i = 0; i < head_size; i++) {
                         val += query[i] * key[i]; // multiply the query_i with all keys_j
                     }
@@ -274,7 +273,7 @@ void multihead_attention(int B, int T, int C, int NHEADS,
     }
 }
 
-// TODO: Implement multi-head causal self-attention, treating each head as a dimension
+/*
 void causal_self_attn(int B, int T, int C, float *wQ, float *wK, float *wV, float *in, float *out, float *bias) {
     // 1) for each input token create a query,key,value vectors by multiplying inputs by weight matrices wQ,wK,wV
     // 2) multiply (dot prod.) current query vector, by only key vectors of previous tokens, to get the score of how well they match
@@ -333,57 +332,8 @@ void causal_self_attn(int B, int T, int C, float *wQ, float *wK, float *wV, floa
             
         }
     }
-
     free(query); free(key); free(value);
     free(attn_matrix); free(transpose_key);
-}
-
-/*
-// single-head (for now). Also this is only self-attention, and I need to implement the causal_self-attention.
-    // remember that each token_sequence will generate a query, key, value vector. One for each sequence
-
-    // IMPORTANT!
-    // big understanding: when storing the tensor in the memory, only its embeddings are being stored, and not the tokens as well. 
-    // I though it was stored as: [t0, e0, e1, t1, e0, e1,...]. In reality is [e0,e1,e0,e1] (just the embeddings)
-    // query, key, value matrices
-    float *query = (float*)malloc(B * T * C * sizeof(float)); // (B,T,C) @ (C,C) -> (B,T,C)
-    float *key   = (float*)malloc(B * T * C * sizeof(float));
-    float *value = (float*)malloc(B * T * C * sizeof(float));
-    //  calculate the query, key, value matrices
-    for (int b = 0; b < B; b++) {
-        for (int t = 0; t < T; t++) {
-            float *in_x = in + b * T * C + t * C; // skips to each embedding vector starting position
-            float q, k, v = 0.0f;
-            // aggregate the values of each embedding of token t * each col of wQ...
-            for (int cw = 0; cw < C; cw++) {
-                for (int c = 0; c < C; c++) { // on in_x, this loop will go through each embedding value of the embedding vector
-                    q += in_x[c] * wQ[c * C + cw]; // "c*C": skips over the row. "+cw": go to the next column. I think now it's right
-                    k += in_x[c] * wK[c * C + cw];
-                    v += in_x[c] * wV[c * C + cw];
-                }
-            }
-            // store the aggregated values into the right position of the resulting query/key/value matrices
-            for (int i = 0; i < C; i++) {
-                query[b*T*C+t*C+i] = q; // putting this outside for efficiency, avoiding wasteful memory access
-                key[b*T*C+t*C+i]   = k;
-                value[b*T*C+t*C+i] = v;
-            }
-
-        }
-        // computing attention scores dotproduct(query*key)
-        // the dot product takes 2 vectors and return 1 value. So each resulting value will correspond to the query[i] * key[j]
-        //float *att_scores = (float*)malloc(B * T * T * sizeof(float)); // attention_score is a single number for each token
-        // we can compute att_scores efficiently by stacking query and key vectors into 2 matrices, and multiplying query matrix with transposed key matrix
-        // compute query[i] * key[j] for j in range(n)
-        float *att_matrix = (float*)malloc(B * T * T * sizeof(float));
-        float *transpose_keys = (float*)malloc(B * T * T * sizeof(float));
-        transpose(key, transpose_keys, B, T, T); // transpose is not right yet
-        
-        float att_values = 0.0f;
-        for (int tx = 0; tx < T; tx++) {
-            for (int ty = 0; ty < C; ty++) {
-                att_values += query[b*T*C+tx*C+ty] * transpose_keys[ty*C+tx]; // (B,T,C) @ (B,C,T) = (B,T,T). (ty*C+tx) gets the column elements
-            }
 }
 */
 
@@ -424,7 +374,7 @@ void cross_entropy_loss(float* loss, float* x, int* y) {
 // ...
 
 // ----- utils -----
-// function to split dataset tokens into train/test (90,10)%
+// split dataset tokens into train/test (90,10)%
 void split_data(int *tokens, int sz, int *train, int *test, int train_sz, int test_sz) {
     for (int i = 0; i < train_sz; i++) {
         train[i] = tokens[i];
@@ -558,7 +508,6 @@ int main() {
 }
 
 /*
-Notes:
 TODO:
 - allocate all necessary memory before hand, into a single place
 - implement a simple DataLoader
@@ -575,8 +524,6 @@ Notes of self-attn:
 - 6) projecting: before sending this vector for the next sublayer, we multiply the vector size (C) by wO(C, C). We need a 4th weight matrix of size (C, C) to project.
 Doing all these, we have produced the vector that we can send to the next layer, which is the Feed Forward NN layer.
 
-
-
 ---- FLOW of the data -----
     * embeddings: generate token emb + pos emb, resulting in a (B,T,C) tensor
     * layernorm: the (B,T,C) tensor goes to layernorm, where it normalizes over the embeddings of each sequence,
@@ -589,5 +536,10 @@ Doing all these, we have produced the vector that we can send to the next layer,
                  2) split query,key,value into n_heads. Ex: if query(B,T,C=768) and we want 12 attention heads, if we
                     divide 768/12 = 64, so we'll have a matrix (12x64) where each row is a head.
 
+Notes:
+- IMPORTANT!
+    big understanding: when storing the tensor in the memory, only its embeddings are being stored, and not the tokens as well. 
+    I though it was stored as: [t0, e0, e1, t1, e0, e1,...]. In reality is [e0,e1,e0,e1] (just the embeddings)
+- remember that each token_sequence will generate a query, key, value vector. One for each sequence 
 
 */
