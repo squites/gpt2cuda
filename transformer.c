@@ -204,9 +204,10 @@ void multihead_attention(int B, int T, int C, int NHEADS,
     // in shape is (B,T,C)
     // notes llm.c parameters:
     // - qkv(B,T,C*3): contains the query,key,value vectors. 3C is the concatenated Q,K,V for each token
-    // - before_soft(B,NH,T,T): pre attention scores. Holds the dotproduct between queries and keys. Before is sent to softmax (unormalized)
+    // - before_soft(B,NH,T,T): pre attention scores. Holds the dotproduct between queries and keys, before is sent to softmax (unormalized)
     // - softmax_scores(B,NH,T,T): post attention scores. Stores the attention weights after the softmax
-    // -
+    // - out(B,T,C): holds the resulting tensor
+
     int C3 = C*3;
     int head_size = C/NHEADS;  
 
@@ -220,33 +221,39 @@ void multihead_attention(int B, int T, int C, int NHEADS,
 
                 // 2) scoring
                 float maxval = 0.0f; //preatt[0];
-                for (int tok = 0; tok < T; tok++) { // this should be tok <= t?
+                //for (int tok = 0; tok < T; tok++) { // this should be tok <= t?
+                for (int tok = 0; tok <= t; tok++) {
                     float *key = qkv + b*T*C3 + tok*C3 + C + h*head_size; // gets the key vector of token 'tok' of head h
                     float val = 0.0f;
                     // since its divided by heads, instead of the whole C, now we loop through C/N_HEADS, which is 'head_size'
-                    if (tok <= t) {    
-                        for (int i = 0; i < head_size; i++) {
-                            val += query[i] * key[i];
-                        }
-                        // scale
-                        val *= (1/sqrtf(head_size));
-                        if (val > maxval) maxval = val;
-                    } else {
-                        // mask
-                        val = 0.0f;
+                    //if (tok <= t) {    
+                    for (int i = 0; i < head_size; i++) {
+                        val += query[i] * key[i]; // multiply the query_i with all keys_j
                     }
+                    // scale
+                    // float scale = 1/sqrtf(head_size);
+                    // val *= scale;
+                    val *= (1/sqrtf(head_size));
+                    if (val > maxval) maxval = val;
+                    //} else {
+                        // mask
+                        //val = 0.0f;
+                    //}
                     preatt[tok] = val;
                 }
 
                 // 3) softmax
                 float sum = 0.0f;
-                for (int tok = 0; tok < T; tok++) { //<= t; tok++) {
-                    float exp = expf(preatt[tok] - maxval); // maxval for numerical stability
-                    sum += exp;
+                for (int tok = 0; tok <= t; tok++) { //< T; tok++) {
+                    float expon = expf(preatt[tok] - maxval); // maxval for numerical stability
+                    sum += expon;
+                    att_scores[tok] = expon;
                 }
 
+                // 3.1) normalize
                 for (int tok = 0; tok < T; tok++) {
-                    att_scores[tok] *= (1.0f/sum);
+                    if (tok <= t) att_scores[tok] *= (1.0f/sum);
+                    else att_scores[tok] = 0.0f; // mask
                 }
 
                 // 4) aggregate
@@ -256,8 +263,8 @@ void multihead_attention(int B, int T, int C, int NHEADS,
                     outp[i] = 0.0f;
                 }
                 // accumulate
-                for (int tok = 0; tok < T; tok++) {
-                    float *value = qkv + b*T*C3 + t*C3 + (C*2) + h*head_size;
+                for (int tok = 0; tok <= t; tok++) {
+                    float *value = qkv + b*T*C3 + tok*C3 + (C*2) + h*head_size;
                     for (int i = 0; i < head_size; i++) {
                         outp[i] += att_scores[i] * value[i];
                     }
