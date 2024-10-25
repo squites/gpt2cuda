@@ -19,9 +19,9 @@
 typedef struct {
     uint32_t block_size = 256;   // gpt_small:1024 (actual gpt2 config)
     uint32_t vocab_size = 65;    // gpt_small:50257  
-    uint32_t n_layers = 6;       // gpt_small:12
-    uint32_t n_heads = 6;        // gpt_small:12
-    uint32_t n_embd = 384;       // gpt_small:768 / gpt_medium:1024 / gpt_large:1280/ gpt_extra_large:1600
+    uint32_t n_layers   = 6;     // gpt_small:12
+    uint32_t n_heads    = 6;     // gpt_small:12
+    uint32_t n_embd     = 384;   // gpt_small:768 / gpt_medium:1024 / gpt_large:1280/ gpt_extra_large:1600
 } Config;
 
 typedef struct {
