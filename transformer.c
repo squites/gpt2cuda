@@ -22,7 +22,7 @@ typedef struct {
     uint32_t n_layers   = 6;     // gpt_small:12
     uint32_t n_heads    = 6;     // gpt_small:12
     uint32_t n_embd     = 384;   // gpt_small:768 / gpt_medium:1024 / gpt_large:1280/ gpt_extra_large:1600
-} Config;
+} Config; // hyperparameters
 
 typedef struct {
     // embedding
@@ -43,7 +43,7 @@ typedef struct {
     // embedding
     float *encoding; // (B,T,C)
     // layernorm
-    float *lactv;       // (B,T,C)
+    float *lactv;    // (B,T,C)
     // attention
     float *qkv;      // (B,T,T)
 } Activations;
@@ -51,6 +51,12 @@ typedef struct {
 struct GPT2_layers {
     // TODO:
 };
+
+typedef struct {
+    // TODO:
+    Config config;
+
+} GPT2;
 
 // move this somewhere else (another file)
 char *read_file(char *filename) {
@@ -74,7 +80,7 @@ char *read_file(char *filename) {
     return string;
 }
 
-// ----- Forward pass functions -----
+// ----- Forward pass layers -----
 // Combine token embedding vector + positional embedding vector to encode each token
 void encoder(int B, int T, int C, float *wte, float *wpe, int *in, float *out) {
     for (int b = 0; b < B; b++) { // loop over batches
@@ -120,7 +126,7 @@ void layernorm(int B, int T, int C, float *in, float *out, float weight, float b
             // normalize (this works for each embedding value. We normalize each embedding value of the emb vector for each token)
             float *out_ptr = out + b * T * C + t * C;
             for (int c = 0; c < C; c++) {
-                float x = sq * (in[c]-mean); // not working the right way, not sure why.
+                float x = sq * (in[c]-mean);
                 // scale and shift
                 out_ptr[c] = x * weight + bias;
             }
@@ -374,7 +380,7 @@ void cross_entropy_loss(float* loss, float* x, int* y) {
     
 }
 
-// ----- Backward pass functions ----- 
+// ----- Backward pass layers ----- 
 //
 // ...
 
@@ -409,6 +415,30 @@ void get_batch(char *split, int *train_data, int *test_data, int data_sz, int *x
     }
 }
 
+
+
+// forward the model
+void forward(GPT2 *model) {
+    int L = model->config.n_layers;
+    // encode
+    // ...
+    for (int l = 0; l < L; l++) {
+        layernorm(BATCH_SZ, BLOCK_SZ, EMBD_SZ, );
+        matmul();
+        multihead_attention();
+        matmul();
+        residual_stream();
+        layernorm();
+        matmul();
+        GELU_aprox();
+        matmul();
+        residual_stream();
+    }
+}
+
+
+
+// ----- Main -----
 int main() {
     int B = BATCH_SZ;
     int T = BLOCK_SZ;
