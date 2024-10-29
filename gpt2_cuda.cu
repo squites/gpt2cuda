@@ -4,7 +4,6 @@
 
 __global__ void encoder(int B, int T, int C, const uint32_t* tokens, float* out, 
                         const float* __restrict__ wte, const float* __restrict__ wpe) {
-    
     // points to the start of the tokens for the current line
     int* line_start = tokens + blockIdx.x * T;
     size_t next_line = T * C;
@@ -76,8 +75,54 @@ __global__ void matmul(int B, int T, int C, int outC, int N,
 
 }
 
-/* NOTES:
+
+__global__ void matmul_global_coalescing_k(int M, int N, int)
+
+/* NOTES: 
+encoder (from yaikhom.com):
+- gpt2 small has emb dim of 768. C=768. Dividing by a warp(32 threads), we have 768/32=24. so we need 24 warps. 32x24
+- the ith thread of each thread block handles the ith emb. So, the thread 3 of each block, handles the embedding 3 of each token in the sequence
+images:
+    thread blocks               Batch of token lines
+1  [][][][][][][][]             [][][][][][][][][][] 1
+2  [][][][][][][][]             [][][][][][][][][][] 2
+        ...                             ...
+N  [][][][][][][][]             [][][][][][][][][][] B
+                                1 2               T
+- In the "thread blocks", each row is a thread block, and each element of that row is a thread. Each thread will compute one embedding.
+- In "Batch of token lines", each row is a batch (B), and each element of the row correspond to one token of that batch (T). Shape (B,T)
+
+    Embeddings for the batch
+1   [][][][][][][][][][][][]
+2   [][][][][][][][][][][][]
+              ...
+T   [][][][][][][][][][][][]
+    1 2                    C
+
+- each row is a token, where each element of that row is an embedding value. So, token1 [emb1][emb2][emb3]...[embC]. Shape (T,C).
+
+    Token embedding weights               Positional encoding weights
+1   [][][][][][][][][][][][]            1 [][][][][][][][][][][][][][]
+2   [][][][][][][][][][][][]            2 [][][][][][][][][][][][][][]   
+              ...                                   ...
+V   [][][][][][][][][][][][]         1023 [][][][][][][][][][][][][][]
+    1 2                    C              1 2                       C
+
+- in "token embedding weights", each row is a token, and each element is one embedding value. Shape (Vocab, C)
+- in "Positional encoding weights", each row is a token, and each element is one embedding value. Shape (T, C)
+
+
+
+(from siboehm.com)
 matmul: we'll use grid, block, thread hierarchy to assign each thread a unique entry in the RESULTING matrix C. Then, the thread will compute
 the dot product of the corresponding row of A and column of B, and write the result to C.
+- warp: is a group of 32 threads. A warp is assigned to a warp scheduler, which is the physical core that executes the instructions. There are
+4 warp schedulers per multiprocessor.
+- if we set blockDim to be multidimensional, then the threadId is calculated as: 
+    threadId = threadIdx.x + blockDim.x * (threadIdx.y + blockDim.y * threadIdx.z);
+then threads with neighbouring threadId become part of the same warp.
+- as sequential memory access by threads that are part of the same warp can be grouped and executed as one. (referred to global memory coalescing)
+- global memory coalescing it's the most important thing to keep in mind when optimizing a kernel's GMEM memory access
+The idea is to process threads that are part of the same warp to exploit coalescing
 
 */
