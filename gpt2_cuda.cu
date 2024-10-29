@@ -2,6 +2,63 @@
 
 // ----- kernels -----
 
+__global__ void encoder_v2(
+    float* __restrict__ embedding,
+    const uint32_t* __restrict__ tokens,
+    const float* __restrict__ wte,
+    const float* __restrict__ wpe,
+    uint32_t B, uint32_t T, uint32_t C, ) {
+
+    const int blockid = blockIdx.x;
+    const int threadid = threadIdx.x; // thread id within the block
+    const int numblocks = gridDim.x;  // number of thread blocks (N diagram)
+    const int numthreads = blockDim.x;
+
+    // shared memory to pre-load tokens for a line. Allocated dynamically during kernel invocation
+    extern __shared__ uint32_t* line_of_tokens;
+
+    // points to the start of the tokens for athe current line for block
+    const uint32_t* line_start_ptr = tokens + blockid * T;
+
+    // when we're done processing current line, how far should we jump to get to the start of the next line of tokens for this block
+    const size_t inc_next_line = T * C;
+
+    // where is the start of the embedding buffer where we need to write the embedding for current thread within the current block
+    float* e_ptr = embedding + blockid * C + threadid;
+
+    // when we're done processing current line, how far should we jump to get to the start of the embedding buffer for the next line of
+    // tokens for this thread in this block. Notice that we need to use this, we're already at the channel fo the last token in the current line
+    const size_t inc_embedding_next_line = C * (numblocks - 1);
+
+    // offset from wte pointer for this thread, sice, no matter the token chose, this thread must always access the same channel in the weights
+    const float* thread_wte_ptr = wte + threadid;
+
+    for (int line = blockid; line < B; line += numblocks) {
+        // pre-load a line of tokens into shared memory to allow memory coalescing of token reads from global memory
+        __syncthreads();
+        for (int t = threadid; t < T; t+=numthreads) {
+            line_of_tokens[t] = line_start_ptr[t];
+        }
+        __syncthreads();
+
+        const float* p_ptr = wpe + threadid;
+
+        for (int t = 0; t < T; t++) {
+            uint32_t token = line_of_tokens[t];
+            const float* t_ptr = thread_wte_ptr + token * C;
+            // memory access coalesced: all threads access contiguous global memory, reducing number of memory transactions
+            __syncthreads();
+            *e_ptr = *t_ptr + *p_ptr;
+            e_ptr += C;
+            p_ptr += C;
+        }
+        line_start_ptr += inc_next_line;
+        e_ptr += inc_embedding_next_line;
+    }
+
+}
+
+
 __global__ void encoder(int B, int T, int C, const uint32_t* tokens, float* out, 
                         const float* __restrict__ wte, const float* __restrict__ wpe) {
     // points to the start of the tokens for the current line
@@ -111,6 +168,7 @@ V   [][][][][][][][][][][][]         1023 [][][][][][][][][][][][][][]
 - in "token embedding weights", each row is a token, and each element is one embedding value. Shape (Vocab, C)
 - in "Positional encoding weights", each row is a token, and each element is one embedding value. Shape (T, C)
 
+- We launch this kernel for each batch of token lines, and continue until all of the token lines have been processed.
 
 
 (from siboehm.com)
